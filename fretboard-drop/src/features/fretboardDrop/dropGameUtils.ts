@@ -137,7 +137,10 @@ export function calculateAccuracy(correct: number, wrong: number, misses: number
   return Math.round((correct / total) * 100);
 }
 
-export function getTargetProgress(target: DropTarget | null, now: number): number {
+export function getTargetProgress(
+  target: { startedAt: number; durationMs: number } | null,
+  now: number,
+): number {
   if (!target) return 0;
   return clamp((now - target.startedAt) / target.durationMs, 0, 1);
 }
@@ -259,7 +262,11 @@ export function getPacingTierUpMessage(combo: number): string | null {
   return DROP_PACING_TIERS.find((tier) => combo === tier.minCombo)?.message ?? null;
 }
 
-export function isMatchingFret(stringIndex: number, fret: number, target: DropTarget): boolean {
+export function isMatchingFret(
+  stringIndex: number,
+  fret: number,
+  target: { stringIndex: number; fret: number },
+): boolean {
   return stringIndex === target.stringIndex && fret === target.fret;
 }
 

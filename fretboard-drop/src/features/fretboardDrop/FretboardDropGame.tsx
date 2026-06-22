@@ -402,7 +402,11 @@ function createRunHistoryEntry({
   };
 }
 
-export function FretboardDropGame() {
+export function FretboardDropGame({
+  onSwitchToGuided,
+}: {
+  onSwitchToGuided?: () => void;
+} = {}) {
   const [practiceContext, setPracticeContext] = useState<DropPracticeContext>(DEFAULT_DROP_PRACTICE_CONTEXT);
   const [bestScore, setBestScore] = useState(() => readBestDropScore(DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT));
   const [bestFluencyScore, setBestFluencyScore] = useState(() => readBestFluencyScore(DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT));
@@ -784,6 +788,7 @@ export function FretboardDropGame() {
               onPracticeContextChange={handlePracticeContextChange}
               onStringSelectionChange={handleStringSelectionChange}
               onOpenStats={() => setShowStats(true)}
+              onSwitchToGuided={onSwitchToGuided}
             />
           ) : state.status === "complete" && result ? (
             <DropGameResults
@@ -997,6 +1002,7 @@ function DropStartScreen({
   onPracticeContextChange,
   onStringSelectionChange,
   onOpenStats,
+  onSwitchToGuided,
 }: {
   bestScore: number;
   stringSelection: DropStringSelection;
@@ -1009,6 +1015,7 @@ function DropStartScreen({
   onPracticeContextChange: (practiceContext: DropPracticeContext) => void;
   onStringSelectionChange: (stringSelection: DropStringSelection) => void;
   onOpenStats: () => void;
+  onSwitchToGuided?: () => void;
 }) {
   const practiceLabel = getPracticeLabel(stringSelection, practiceContext);
   const normalizedPractice = normalizePracticeContext(practiceContext);
@@ -1076,6 +1083,15 @@ function DropStartScreen({
             Sound {noteSoundEnabled ? "On" : "Off"}
           </button>
         </div>
+        {onSwitchToGuided ? (
+          <button
+            type="button"
+            onClick={onSwitchToGuided}
+            className="mt-5 text-sm font-black text-cyan-100/74 underline decoration-cyan-100/24 underline-offset-4 transition hover:text-cyan-50 hover:decoration-cyan-100/70"
+          >
+            Want help learning the fretboard? Try Guided Learning
+          </button>
+        ) : null}
       </div>
     </div>
   );

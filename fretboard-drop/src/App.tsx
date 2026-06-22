@@ -1,5 +1,5 @@
-import { FretboardDropGame } from "./features/fretboardDrop/FretboardDropGame";
+import { FretboardDropExperience } from "./features/fretboardDrop/FretboardDropExperience";
 
 export default function App() {
-  return <FretboardDropGame />;
+  return <FretboardDropExperience />;
 }
