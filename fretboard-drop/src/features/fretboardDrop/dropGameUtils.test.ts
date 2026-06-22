@@ -26,8 +26,17 @@ import {
   getStringSelectionKey,
   getStringSelectionLabel,
   getStringVisualState,
+  getActiveFallingTarget,
+  getPlayableFallingTarget,
+  getPromptTimeRemaining,
   getTargetTopStyle,
   getWrongFeedback,
+  pickPromptStagePosition,
+  sortFallingTargetsByProgress,
+  spawnStreamTarget,
+  shouldSpawnStreamTarget,
+  DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+  DROP_TARGET_STREAM_MAX_ON_SCREEN,
   isNoteInCurrentPool,
   isMatchingFret,
   makeDropTarget,
@@ -392,7 +401,13 @@ describe("Fretboard Drop utilities", () => {
     expect(calculateAccuracy(0, 0, 0)).toBe(0);
   });
 
-  it("aligns target bottom with the hit line at miss progress", () => {
+  it("maps prompt progress to a draining time bar", () => {
+    expect(getPromptTimeRemaining(0)).toBe(1);
+    expect(getPromptTimeRemaining(0.5)).toBe(0.5);
+    expect(getPromptTimeRemaining(1)).toBe(0);
+  });
+
+  it("keeps legacy fall positioning helpers for future modes", () => {
     expect(getTargetTopStyle(0)).toBe("calc(5% - 0px)");
     expect(getTargetTopStyle(1)).toBe("calc(85% - 96px)");
   });
@@ -404,5 +419,46 @@ describe("Fretboard Drop utilities", () => {
     expect(getCorrectFeedback(10)).toBe("On fire");
     expect(getWrongFeedback(2)).toBe("Try another fret");
     expect(getMissFeedback(1)).toBe("Next pick");
+  });
+
+  it("assigns prompt positions, picks the most urgent target as active, and streams on an interval", () => {
+    const first = makeDropTarget(1, 0, 0, undefined, [0], DEFAULT_DROP_PRACTICE_CONTEXT);
+    expect(first.stageXPercent).toBeGreaterThan(0);
+    expect(first.stageYPercent).toBeGreaterThan(0);
+
+    const spawned = spawnStreamTarget({
+      fallingTargets: [first],
+      targetSeed: 2,
+      nextStreamSpawnAt: DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+      lastStreamNote: first.note,
+      now: DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+      score: 0,
+      combo: 0,
+      elapsedMs: DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+      recentHitProgresses: [],
+      stringSelection: [0],
+      practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
+      runMode: "normal",
+      focusPool: [],
+    });
+
+    expect(spawned).not.toBeNull();
+    expect(spawned!.fallingTargets).toHaveLength(2);
+    expect(spawned!.nextStreamSpawnAt).toBe(DROP_TARGET_STREAM_SPAWN_INTERVAL_MS * 2);
+    expect(new Set(spawned!.fallingTargets.map((target) => `${target.stageXPercent}:${target.stageYPercent}`)).size).toBe(2);
+    expect(getActiveFallingTarget(spawned!.fallingTargets, DROP_TARGET_STREAM_SPAWN_INTERVAL_MS)?.id).toBe(first.id);
+    expect(getPlayableFallingTarget(spawned!.fallingTargets, DROP_TARGET_STREAM_SPAWN_INTERVAL_MS, true)).toBeNull();
+    expect(shouldSpawnStreamTarget(1_000, DROP_TARGET_STREAM_SPAWN_INTERVAL_MS, 1)).toBe(false);
+    expect(shouldSpawnStreamTarget(
+      DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+      DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+      DROP_TARGET_STREAM_MAX_ON_SCREEN,
+    )).toBe(false);
+  });
+
+  it("spreads prompt positions when one slot is already occupied", () => {
+    const occupied = { stageXPercent: 20, stageYPercent: 20 };
+    const next = pickPromptStagePosition(3, [occupied]);
+    expect(next.stageXPercent !== occupied.stageXPercent || next.stageYPercent !== occupied.stageYPercent).toBe(true);
   });
 });

@@ -3,10 +3,12 @@ import type {
   DropFocusPoolCell,
   DropGameState,
   DropPracticeContext,
+  DropRunMode,
   DropStringIndex,
   DropStringSelection,
   DropStringVisualState,
   DropTarget,
+  DropPromptStagePosition,
   DropVisibleTargetContext,
 } from "./dropGameTypes";
 
@@ -22,6 +24,22 @@ export const DROP_HIT_LINE_TOP_PERCENT = 85;
 export const DROP_TARGET_MIN_DURATION_MS = 2_100;
 export const DROP_TARGET_MAX_DURATION_MS = 6_400;
 export const DROP_TARGET_GENERATION_VERSION = "v1";
+export const DROP_TARGET_STREAM_SPAWN_INTERVAL_MS = 2_400;
+export const DROP_TARGET_STREAM_MAX_ON_SCREEN = 5;
+export const DROP_PROMPT_SIZE_PX = 88;
+export const DROP_PROMPT_COMPACT_SIZE_PX = 72;
+export const DROP_PROMPT_MIN_SLOT_DISTANCE = 16;
+export const DROP_PROMPT_STAGE_SLOTS = [
+  { stageXPercent: 20, stageYPercent: 20 },
+  { stageXPercent: 50, stageYPercent: 16 },
+  { stageXPercent: 80, stageYPercent: 24 },
+  { stageXPercent: 26, stageYPercent: 40 },
+  { stageXPercent: 54, stageYPercent: 44 },
+  { stageXPercent: 78, stageYPercent: 38 },
+  { stageXPercent: 18, stageYPercent: 58 },
+  { stageXPercent: 48, stageYPercent: 62 },
+  { stageXPercent: 82, stageYPercent: 56 },
+] as const satisfies readonly DropPromptStagePosition[];
 export const DROP_PACING_TIERS = [
   { minCombo: 15, speedUpMs: 2_300, message: "Max pace!" },
   { minCombo: 10, speedUpMs: 1_250, message: "Faster now!" },
@@ -124,6 +142,61 @@ export function getTargetProgress(target: DropTarget | null, now: number): numbe
   return clamp((now - target.startedAt) / target.durationMs, 0, 1);
 }
 
+export function getPromptTimeRemaining(progress: number): number {
+  return clamp(1 - progress, 0, 1);
+}
+
+function getPromptSlotDistance(left: DropPromptStagePosition, right: DropPromptStagePosition): number {
+  return Math.hypot(left.stageXPercent - right.stageXPercent, left.stageYPercent - right.stageYPercent);
+}
+
+export function pickPromptStagePosition(
+  seed: number,
+  occupiedStagePositions: readonly DropPromptStagePosition[] = [],
+): DropPromptStagePosition {
+  const available = DROP_PROMPT_STAGE_SLOTS.filter((slot) => (
+    !occupiedStagePositions.some((occupied) => getPromptSlotDistance(slot, occupied) < DROP_PROMPT_MIN_SLOT_DISTANCE)
+  ));
+  const pool = available.length > 0 ? available : DROP_PROMPT_STAGE_SLOTS;
+  return pool[Math.abs(seed) % pool.length];
+}
+
+export function sortFallingTargetsByProgress(targets: readonly DropTarget[], now: number): DropTarget[] {
+  return [...targets].sort((left, right) => {
+    const progressDelta = getTargetProgress(right, now) - getTargetProgress(left, now);
+    if (progressDelta !== 0) return progressDelta;
+    return left.id - right.id;
+  });
+}
+
+export function getActiveFallingTarget(targets: readonly DropTarget[], now: number): DropTarget | null {
+  return sortFallingTargetsByProgress(targets, now)[0] ?? null;
+}
+
+export function getFallingTargetVisibleContexts(
+  targets: readonly DropTarget[],
+  now: number,
+  playableTargetId?: number | null,
+): DropVisibleTargetContext[] {
+  const activeId = playableTargetId === undefined
+    ? getActiveFallingTarget(targets, now)?.id ?? null
+    : playableTargetId;
+  return targets.map((target) => ({
+    id: target.id,
+    stringIndex: target.stringIndex,
+    role: activeId === target.id ? "active-target" : "upcoming-target",
+  }));
+}
+
+export function getPlayableFallingTarget(
+  targets: readonly DropTarget[],
+  now: number,
+  inputLocked = false,
+): DropTarget | null {
+  if (inputLocked) return null;
+  return getActiveFallingTarget(targets, now);
+}
+
 export function getTargetTopStyle(progress: number, targetHeightPx = DROP_TARGET_HEIGHT_PX): string {
   const topPercent = DROP_TARGET_START_TOP_PERCENT
     + progress * (DROP_HIT_LINE_TOP_PERCENT - DROP_TARGET_START_TOP_PERCENT);
@@ -137,6 +210,7 @@ export type DropDurationOptions = {
   elapsedMs?: number;
   afterMiss?: boolean;
   recentHitProgresses?: readonly number[];
+  occupiedStagePositions?: readonly DropPromptStagePosition[];
 };
 
 function getSeededDurationVariation(seed: number): number {
@@ -423,6 +497,7 @@ export function makeDropTarget(
   const focusedPositions = getPositionsForNote(note, stringSelection);
   const positions = focusedPositions.length > 0 ? focusedPositions : getPositionsForNote(note, ALL_DROP_STRING_INDEXES);
   const position = positions[Math.floor(Math.random() * positions.length)];
+  const stagePosition = pickPromptStagePosition(seed, durationOptions.occupiedStagePositions ?? []);
 
   return {
     id: seed,
@@ -431,6 +506,8 @@ export function makeDropTarget(
     fret: position.fret,
     startedAt: now,
     durationMs: getDropDurationMs(score, { ...durationOptions, seed }),
+    stageXPercent: stagePosition.stageXPercent,
+    stageYPercent: stagePosition.stageYPercent,
   };
 }
 
@@ -471,13 +548,160 @@ export function makeFocusDropTarget(
     fret: cell.fret,
     startedAt: now,
     durationMs: getDropDurationMs(score, { ...durationOptions, seed }),
+    ...pickPromptStagePosition(seed, durationOptions.occupiedStagePositions ?? []),
+  };
+}
+
+export type BuildFallingTargetsInput = {
+  startSeed: number;
+  now: number;
+  score: number;
+  count: number;
+  stringSelection: DropStringSelection;
+  practiceContext: DropPracticeContext;
+  runMode: DropRunMode;
+  focusPool: readonly DropFocusPoolCell[];
+  durationOptions?: DropDurationOptions;
+  verticalStaggerMs?: number;
+};
+
+export function buildFallingTargets({
+  startSeed,
+  now,
+  score,
+  count,
+  stringSelection,
+  practiceContext,
+  runMode,
+  focusPool,
+  durationOptions = {},
+  verticalStaggerMs = DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+}: BuildFallingTargetsInput): { targets: DropTarget[]; nextSeed: number } {
+  const targets: DropTarget[] = [];
+  let seed = startSeed;
+  let previousNote: Note | undefined;
+  let previousCellId: string | undefined;
+  const occupiedStagePositions: DropPromptStagePosition[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const startedAt = now - index * verticalStaggerMs;
+    const sharedOptions = {
+      ...durationOptions,
+      occupiedStagePositions,
+    };
+    const target = runMode === "focus"
+      ? makeFocusDropTarget(seed, startedAt, score, focusPool, previousCellId, sharedOptions)
+      : makeDropTarget(
+        seed,
+        startedAt,
+        score,
+        previousNote,
+        stringSelection,
+        practiceContext,
+        sharedOptions,
+      );
+    targets.push(target);
+    occupiedStagePositions.push({
+      stageXPercent: target.stageXPercent,
+      stageYPercent: target.stageYPercent,
+    });
+    previousNote = target.note;
+    previousCellId = `standard:${target.stringIndex}:${target.fret}`;
+    seed += 1;
+  }
+
+  return { targets, nextSeed: seed };
+}
+
+export type SpawnStreamTargetInput = {
+  fallingTargets: readonly DropTarget[];
+  targetSeed: number;
+  nextStreamSpawnAt: number;
+  lastStreamNote?: Note;
+  now: number;
+  score: number;
+  combo: number;
+  elapsedMs: number;
+  recentHitProgresses: readonly number[];
+  stringSelection: DropStringSelection;
+  practiceContext: DropPracticeContext;
+  runMode: DropRunMode;
+  focusPool: readonly DropFocusPoolCell[];
+  inputLocked?: boolean;
+};
+
+export function shouldSpawnStreamTarget(
+  now: number,
+  nextStreamSpawnAt: number,
+  fallingTargetCount: number,
+  inputLocked = false,
+  maxOnScreen = DROP_TARGET_STREAM_MAX_ON_SCREEN,
+): boolean {
+  if (inputLocked) return false;
+  if (fallingTargetCount >= maxOnScreen) return false;
+  if (fallingTargetCount === 0) return true;
+  return now >= nextStreamSpawnAt;
+}
+
+export function spawnStreamTarget(input: SpawnStreamTargetInput): {
+  fallingTargets: DropTarget[];
+  targetSeed: number;
+  nextStreamSpawnAt: number;
+  lastStreamNote: Note;
+} | null {
+  if (!shouldSpawnStreamTarget(
+    input.now,
+    input.nextStreamSpawnAt,
+    input.fallingTargets.length,
+    input.inputLocked,
+  )) {
+    return null;
+  }
+
+  const occupiedStagePositions = input.fallingTargets.map((target) => ({
+    stageXPercent: target.stageXPercent,
+    stageYPercent: target.stageYPercent,
+  }));
+  const durationOptions = {
+    combo: input.combo,
+    elapsedMs: input.elapsedMs,
+    recentHitProgresses: input.recentHitProgresses,
+    occupiedStagePositions,
+  };
+  const previousCellId = input.fallingTargets.length > 0
+    ? `standard:${input.fallingTargets[input.fallingTargets.length - 1].stringIndex}:${input.fallingTargets[input.fallingTargets.length - 1].fret}`
+    : undefined;
+  const target = input.runMode === "focus"
+    ? makeFocusDropTarget(
+      input.targetSeed,
+      input.now,
+      input.score,
+      input.focusPool,
+      previousCellId,
+      durationOptions,
+    )
+    : makeDropTarget(
+      input.targetSeed,
+      input.now,
+      input.score,
+      input.lastStreamNote,
+      input.stringSelection,
+      input.practiceContext,
+      durationOptions,
+    );
+
+  return {
+    fallingTargets: [...input.fallingTargets, target],
+    targetSeed: input.targetSeed + 1,
+    nextStreamSpawnAt: input.now + DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+    lastStreamNote: target.note,
   };
 }
 
 export function createInitialDropState(now: number = 0): DropGameState {
   return {
     status: "start",
-    activeTarget: null,
+    fallingTargets: [],
     score: 0,
     combo: 0,
     lives: DROP_STARTING_LIVES,
@@ -491,6 +715,7 @@ export function createInitialDropState(now: number = 0): DropGameState {
     runStartedAt: now,
     now,
     targetSeed: 1,
+    nextStreamSpawnAt: 0,
     feedback: null,
     missReveal: null,
     stageCue: null,

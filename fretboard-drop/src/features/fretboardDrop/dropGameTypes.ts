@@ -28,6 +28,11 @@ export type DropPracticeContext =
       selectedNotes: readonly Note[];
     };
 
+export type DropPromptStagePosition = {
+  stageXPercent: number;
+  stageYPercent: number;
+};
+
 export type DropTarget = {
   id: number;
   note: Note;
@@ -35,6 +40,8 @@ export type DropTarget = {
   fret: number;
   startedAt: number;
   durationMs: number;
+  stageXPercent: number;
+  stageYPercent: number;
 };
 
 export type DropRunMode = "normal" | "focus";
@@ -73,7 +80,7 @@ export type DropStageCue = {
 
 export type DropGameState = {
   status: DropGameStatus;
-  activeTarget: DropTarget | null;
+  fallingTargets: readonly DropTarget[];
   score: number;
   combo: number;
   lives: number;
@@ -87,6 +94,8 @@ export type DropGameState = {
   runStartedAt: number;
   now: number;
   targetSeed: number;
+  nextStreamSpawnAt: number;
+  lastStreamNote?: Note;
   feedback: DropFeedback | null;
   missReveal: DropMissReveal | null;
   stageCue: DropStageCue | null;

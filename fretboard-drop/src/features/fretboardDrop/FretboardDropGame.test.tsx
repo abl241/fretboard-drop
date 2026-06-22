@@ -13,6 +13,13 @@ import {
   recordWrongFretTap,
 } from "./dropCellProgress";
 
+function getActiveNotePromptLabel(label: string | RegExp = /.+/) {
+  if (typeof label === "string") {
+    return screen.getByLabelText(`Note prompt ${label} (active)`);
+  }
+  return screen.getByLabelText(new RegExp(`Note prompt ${label.source} \\(active\\)`));
+}
+
 function getStringButton(label: string): HTMLElement {
   return screen.getAllByRole("button", { name: label })[0];
 }
@@ -84,7 +91,7 @@ describe("FretboardDropGame", () => {
   it("shows practice strings on the start screen with high E selected by default", () => {
     render(<FretboardDropGame />);
 
-    expect(screen.getByText("Choose strings, then click the fret that makes the falling note.")).toBeInTheDocument();
+    expect(screen.getByText("Read the note, find it on the fretboard, and answer before the bar runs out.")).toBeInTheDocument();
     expect(screen.getByText("Practice Strings")).toBeInTheDocument();
     expect(screen.getByText("Selected: high E")).toBeInTheDocument();
     expect(screen.getByText("Practice notes:")).toBeInTheDocument();
@@ -119,7 +126,7 @@ describe("FretboardDropGame", () => {
     expect(await screen.findByRole("heading", { name: "Your Fretboard" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Play" })[0]);
 
-    expect(screen.getByLabelText(/Falling target/)).toBeInTheDocument();
+    expect(getActiveNotePromptLabel()).toBeInTheDocument();
   });
 
   it("switches Stats metrics and keeps no-data cells neutral", async () => {
@@ -374,7 +381,7 @@ describe("FretboardDropGame", () => {
     expect(await screen.findByText("1 eligible cell found. Using all of them.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Practice weakest" }));
 
-    expect(screen.getByLabelText("Falling target A")).toBeInTheDocument();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
     expect(screen.getByText("Focus Practice · 1 cells")).toBeInTheDocument();
   });
 
@@ -505,7 +512,7 @@ describe("FretboardDropGame", () => {
     for (const note of ["C", "D", "E", "F", "G", "B"]) togglePracticeNote(note);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
-    expect(screen.getByLabelText("Falling target A")).toBeInTheDocument();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
     expect(screen.getAllByText("Focus: high E · A only").length).toBeGreaterThan(0);
   });
 
@@ -516,7 +523,7 @@ describe("FretboardDropGame", () => {
     for (const note of ["E", "F", "G", "A", "B"]) togglePracticeNote(note);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
-    expect(screen.getByLabelText(/Falling target [CD]/)).toBeInTheDocument();
+    expect(getActiveNotePromptLabel(/[CD]/)).toBeInTheDocument();
     expect(screen.getAllByText("Focus: high E · C,D").length).toBeGreaterThan(0);
     vi.restoreAllMocks();
   });
@@ -579,13 +586,13 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
 
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Falling target A")).toBeInTheDocument();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "String 2, open string" }));
 
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Falling target A")).toBeInTheDocument();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
     expect(screen.queryByText("Almost")).not.toBeInTheDocument();
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
@@ -600,7 +607,7 @@ describe("FretboardDropGame", () => {
 
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
     expect(screen.getByText("Almost")).toBeInTheDocument();
-    expect(screen.getByLabelText("Falling target A")).toBeInTheDocument();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
@@ -707,14 +714,14 @@ describe("FretboardDropGame", () => {
     const reveal = screen.getByTestId("miss-reveal");
     expect(reveal).toBeInTheDocument();
     expect(reveal.textContent).toMatch(/^[A-G]$/);
-    expect(screen.queryByLabelText(/Falling target/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Note prompt .+ \(active\)/)).not.toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(520);
     });
 
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Falling target/)).toBeInTheDocument();
+    expect(getActiveNotePromptLabel()).toBeInTheDocument();
   });
 
   it("shows the final miss reveal before completing the run", () => {
@@ -742,7 +749,7 @@ describe("FretboardDropGame", () => {
       });
 
       expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
-      expect(screen.getByLabelText(/Falling target/)).toBeInTheDocument();
+      expect(getActiveNotePromptLabel()).toBeInTheDocument();
     }
 
     act(() => {

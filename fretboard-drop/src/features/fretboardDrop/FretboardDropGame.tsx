@@ -11,22 +11,28 @@ import type {
   DropStageCue,
   DropStringIndex,
   DropStringSelection,
+  DropTarget,
   DropVisibleTargetContext,
 } from "./dropGameTypes";
 import {
   ALL_DROP_STRING_INDEXES,
   CURRENT_DROP_NOTE_POOL,
-  DROP_COMPACT_LANDSCAPE_TARGET_HEIGHT_PX,
   DEFAULT_DROP_PRACTICE_CONTEXT,
   DEFAULT_DROP_STRING_SELECTION,
   DROP_MAX_FRET,
   DROP_MIN_FRET,
+  DROP_PROMPT_COMPACT_SIZE_PX,
+  DROP_PROMPT_SIZE_PX,
   DROP_RUN_DURATION_MS,
   DROP_STRING_FOCUS_OPTIONS,
   DROP_TARGET_GENERATION_VERSION,
-  DROP_TARGET_HEIGHT_PX,
+  DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
   calculateAccuracy,
   createInitialDropState,
+  getActiveFallingTarget,
+  getPlayableFallingTarget,
+  getFallingTargetVisibleContexts,
+  spawnStreamTarget,
   getCorrectFeedback,
   formatPracticeNoteLabel,
   getSelectedPracticeNotes,
@@ -38,7 +44,7 @@ import {
   getStringSelectionLabel,
   getStringVisualState,
   getTargetProgress,
-  getTargetTopStyle,
+  getPromptTimeRemaining,
   getWrongFeedback,
   isMatchingFret,
   makeDropTarget,
@@ -103,47 +109,63 @@ function completeRun(state: DropGameState): DropGameState {
   return {
     ...state,
     status: "complete",
-    activeTarget: null,
+    fallingTargets: [],
     combo: 0,
     missReveal: null,
     timeLeftMs: Math.max(0, state.timeLeftMs),
   };
 }
 
-function spawnNextTarget(
+function resolveCorrectHit(
   state: DropGameState,
-  now: number,
-  score: number,
-  previousNote?: Note,
-  afterMiss = false,
+  activeTarget: DropTarget,
 ): DropGameState {
-  const nextSeed = state.targetSeed + 1;
-  const previousCellId = state.activeTarget ? `standard:${state.activeTarget.stringIndex}:${state.activeTarget.fret}` : undefined;
   return {
     ...state,
-    targetSeed: nextSeed,
-    activeTarget: state.runMode === "focus"
-      ? makeFocusDropTarget(nextSeed, now, score, state.focusPool, previousCellId, {
-        afterMiss,
-        combo: state.combo,
-        elapsedMs: now - state.runStartedAt,
-        recentHitProgresses: state.recentHitProgresses,
-      })
-      : makeDropTarget(
-        nextSeed,
-        now,
-        score,
-        previousNote,
-        state.stringSelection,
-        state.practiceContext,
-        {
-          afterMiss,
-          combo: state.combo,
-          elapsedMs: now - state.runStartedAt,
-          recentHitProgresses: state.recentHitProgresses,
-        },
-      ),
+    fallingTargets: state.fallingTargets.filter((target) => target.id !== activeTarget.id),
   };
+}
+
+function applyStreamSpawn(state: DropGameState, now: number): DropGameState {
+  const spawned = spawnStreamTarget({
+    fallingTargets: state.fallingTargets,
+    targetSeed: state.targetSeed,
+    nextStreamSpawnAt: state.nextStreamSpawnAt,
+    lastStreamNote: state.lastStreamNote,
+    now,
+    score: state.score,
+    combo: state.combo,
+    elapsedMs: now - state.runStartedAt,
+    recentHitProgresses: state.recentHitProgresses,
+    stringSelection: state.stringSelection,
+    practiceContext: state.practiceContext,
+    runMode: state.runMode,
+    focusPool: state.focusPool,
+    inputLocked: state.missReveal !== null,
+  });
+
+  if (!spawned) return state;
+
+  return {
+    ...state,
+    fallingTargets: spawned.fallingTargets,
+    targetSeed: spawned.targetSeed,
+    nextStreamSpawnAt: spawned.nextStreamSpawnAt,
+    lastStreamNote: spawned.lastStreamNote,
+  };
+}
+
+function createFirstStreamTarget(
+  now: number,
+  stringSelection: DropStringSelection,
+  practiceContext: DropPracticeContext,
+  runMode: DropGameState["runMode"],
+  focusPool: readonly DropFocusPoolCell[],
+): DropTarget {
+  const durationOptions = { combo: 0, elapsedMs: 0 };
+  return runMode === "focus"
+    ? makeFocusDropTarget(1, now, 0, focusPool, undefined, durationOptions)
+    : makeDropTarget(1, now, 0, undefined, stringSelection, practiceContext, durationOptions);
 }
 
 function dropGameReducer(state: DropGameState, action: DropGameAction): DropGameState {
@@ -151,24 +173,20 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
     case "start": {
       const runMode = action.runMode ?? "normal";
       const focusPool = action.focusPool ?? [];
-      const nextTarget = runMode === "focus"
-        ? makeFocusDropTarget(1, action.now, 0, focusPool, undefined, { combo: 0, elapsedMs: 0 })
-        : makeDropTarget(
-          1,
-          action.now,
-          0,
-          undefined,
-          action.stringSelection,
-          action.practiceContext,
-          {
-            combo: 0,
-            elapsedMs: 0,
-          },
-        );
+      const firstTarget = createFirstStreamTarget(
+        action.now,
+        action.stringSelection,
+        action.practiceContext,
+        runMode,
+        focusPool,
+      );
       return {
         ...createInitialDropState(action.now),
         status: "playing",
-        activeTarget: nextTarget,
+        fallingTargets: [firstTarget],
+        targetSeed: 2,
+        nextStreamSpawnAt: action.now + DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
+        lastStreamNote: firstTarget.note,
         stringSelection: action.stringSelection,
         practiceContext: action.practiceContext,
         runMode,
@@ -194,44 +212,46 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
         return completeRun(nextState);
       }
 
-      if (state.activeTarget && getTargetProgress(state.activeTarget, action.now) >= 1) {
+      const activeTarget = getActiveFallingTarget(state.fallingTargets, action.now);
+      if (activeTarget && getTargetProgress(activeTarget, action.now) >= 1) {
         const nextLives = state.lives - 1;
         nextState = {
           ...nextState,
           lives: nextLives,
           combo: 0,
           misses: state.misses + 1,
-          activeTarget: null,
+          fallingTargets: state.fallingTargets.filter((target) => target.id !== activeTarget.id),
           feedback: null,
           missReveal: {
             id: action.now,
-            stringIndex: state.activeTarget.stringIndex,
-            fret: state.activeTarget.fret,
-            note: state.activeTarget.note,
+            stringIndex: activeTarget.stringIndex,
+            fret: activeTarget.fret,
+            note: activeTarget.note,
             score: state.score,
             completesRun: nextLives <= 0,
           },
           stageCue: {
             id: action.now,
             kind: "miss",
-            note: state.activeTarget.note,
-            message: `It was ${state.activeTarget.note}`,
+            note: activeTarget.note,
+            message: `It was ${activeTarget.note}`,
           },
         };
 
         return nextState;
       }
 
-      return nextState;
+      return applyStreamSpawn(nextState, action.now);
     }
 
     case "fret-click": {
-      if (state.status !== "playing" || !state.activeTarget) return state;
-      if (action.stringIndex !== state.activeTarget.stringIndex) {
+      const playableTarget = getPlayableFallingTarget(state.fallingTargets, action.now, state.missReveal !== null);
+      if (state.status !== "playing" || !playableTarget) return state;
+      if (action.stringIndex !== playableTarget.stringIndex) {
         return { ...state, now: action.now };
       }
 
-      const hit = isMatchingFret(action.stringIndex, action.fret, state.activeTarget);
+      const hit = isMatchingFret(action.stringIndex, action.fret, playableTarget);
       const feedback: DropFeedback = {
         id: action.now,
         stringIndex: action.stringIndex,
@@ -251,7 +271,7 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
           stageCue: {
             id: action.now,
             kind: "wrong",
-            note: state.activeTarget.note,
+            note: playableTarget.note,
             message: getWrongFeedback(state.wrong + 1),
           },
         };
@@ -259,7 +279,7 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
 
       const nextCombo = state.combo + 1;
       const nextScore = state.score + 1;
-      const hitProgress = getTargetProgress(state.activeTarget, action.now);
+      const hitProgress = getTargetProgress(playableTarget, action.now);
       const recentHitProgresses = [...state.recentHitProgresses, hitProgress].slice(-6);
       const hitProgresses = [...state.hitProgresses, hitProgress];
       const tierUpMessage = getPacingTierUpMessage(nextCombo);
@@ -277,12 +297,12 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
         stageCue: {
           id: action.now,
           kind: tierUpMessage ? "tier-up" : "correct",
-          note: state.activeTarget.note,
+          note: playableTarget.note,
           message: tierUpMessage ?? getCorrectFeedback(nextCombo),
         },
       };
 
-      return spawnNextTarget(nextState, action.now, nextScore, state.activeTarget.note);
+      return applyStreamSpawn(resolveCorrectHit(nextState, playableTarget), action.now);
     }
 
     case "clear-feedback":
@@ -291,13 +311,11 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
 
     case "finish-miss-reveal": {
       if (state.missReveal?.id !== action.id) return state;
-      const previousNote = state.missReveal.note;
-      const scoreAtMiss = state.missReveal.score;
       const shouldCompleteRun = state.missReveal.completesRun;
       const nextState = { ...state, now: action.now, missReveal: null };
       if (shouldCompleteRun) return completeRun(nextState);
-      if (nextState.status !== "playing" || nextState.activeTarget || nextState.lives <= 0) return nextState;
-      return spawnNextTarget(nextState, action.now, scoreAtMiss, previousNote, true);
+      if (nextState.status !== "playing" || nextState.lives <= 0) return nextState;
+      return applyStreamSpawn(nextState, action.now);
     }
 
     case "clear-stage-cue":
@@ -394,12 +412,25 @@ export function FretboardDropGame() {
   const [noteSoundEnabled, setNoteSoundEnabled] = useState(readNoteSoundEnabled);
   const [state, dispatch] = useReducer(dropGameReducer, undefined, () => createInitialDropState(performance.now()));
   const [animationNow, setAnimationNow] = useState(() => performance.now());
-  const targetHeightPx = useDropTargetHeightPx();
+  const promptSizePx = useDropPromptSizePx();
   const isWarmSurface = state.status === "start" || state.status === "complete";
   const completedRunTrackedRef = useRef<number | null>(null);
   const missProgressRecordedRef = useRef<number | null>(null);
 
-  const progress = getTargetProgress(state.activeTarget, state.status === "playing" ? animationNow : state.now);
+  const animationTime = state.status === "playing" ? animationNow : state.now;
+  const inputLocked = state.missReveal !== null;
+  const activeTarget = useMemo(
+    () => getActiveFallingTarget(state.fallingTargets, animationTime),
+    [animationTime, state.fallingTargets],
+  );
+  const playableTarget = useMemo(
+    () => getPlayableFallingTarget(state.fallingTargets, animationTime, inputLocked),
+    [animationTime, inputLocked, state.fallingTargets],
+  );
+  const visibleTargetContexts = useMemo(
+    () => getFallingTargetVisibleContexts(state.fallingTargets, animationTime, playableTarget?.id ?? null),
+    [animationTime, playableTarget?.id, state.fallingTargets],
+  );
   const result = useMemo<DropGameResult | null>(() => {
     if (state.status !== "complete") return null;
     const accuracy = calculateAccuracy(state.correct, state.wrong, state.misses);
@@ -695,15 +726,15 @@ export function FretboardDropGame() {
 
   function handleFretClick(stringIndex: number, fret: number) {
     const now = performance.now();
-    if (noteSoundEnabled && state.activeTarget?.stringIndex === stringIndex) {
-      playFretboardNote({ stringIndex: state.activeTarget.stringIndex, fret });
+    const playableTarget = getPlayableFallingTarget(state.fallingTargets, now);
+    if (noteSoundEnabled && playableTarget?.stringIndex === stringIndex) {
+      playFretboardNote({ stringIndex: playableTarget.stringIndex, fret });
     }
-    if (state.status === "playing" && state.activeTarget?.stringIndex === stringIndex) {
-      const activeTarget = state.activeTarget;
-      if (isMatchingFret(stringIndex, fret, state.activeTarget)) {
-        recordCellProgressSafely(() => recordCorrectTargetCellProgress(activeTarget, getTargetProgress(activeTarget, now), new Date()));
+    if (state.status === "playing" && playableTarget?.stringIndex === stringIndex) {
+      if (isMatchingFret(stringIndex, fret, playableTarget)) {
+        recordCellProgressSafely(() => recordCorrectTargetCellProgress(playableTarget, getTargetProgress(playableTarget, now), new Date()));
       } else {
-        recordCellProgressSafely(() => recordWrongTargetCellProgress(activeTarget, fret, new Date()));
+        recordCellProgressSafely(() => recordWrongTargetCellProgress(playableTarget, fret, new Date()));
       }
     }
     setAnimationNow(now);
@@ -796,7 +827,7 @@ export function FretboardDropGame() {
                 bestScore={Math.max(bestScore, state.score)}
                 stringSelection={state.stringSelection}
                 practiceContext={state.practiceContext}
-                targetDurationMs={state.activeTarget?.durationMs ?? null}
+                targetDurationMs={playableTarget?.durationMs ?? activeTarget?.durationMs ?? null}
                 runMode={state.runMode}
                 focusPoolSize={state.focusPool.length}
                 onHome={goHome}
@@ -804,21 +835,18 @@ export function FretboardDropGame() {
               <div className="drop-game-field grid min-h-0 flex-1 gap-2 lg:grid-rows-[minmax(430px,1fr)_auto]">
                 <DropStage
                   cue={state.stageCue}
-                  target={state.activeTarget}
-                  progress={progress}
+                  fallingTargets={state.fallingTargets}
+                  animationTime={animationTime}
+                  activeTargetId={playableTarget?.id ?? null}
                   combo={state.combo}
                   stringSelection={state.stringSelection}
                   practiceContext={state.practiceContext}
-                  targetHeightPx={targetHeightPx}
+                  targetHeightPx={promptSizePx}
                 />
                 <div className="drop-fretboard-wrap relative">
                   <div className="pointer-events-none absolute -top-2 left-1/2 z-10 h-4 w-px -translate-x-1/2 bg-cyan-200/45 shadow-[0_0_16px_rgba(103,232,249,0.55)]" />
                   <DropGameFretboard
-                    visibleTargets={
-                      state.activeTarget
-                        ? [{ id: state.activeTarget.id, stringIndex: state.activeTarget.stringIndex, role: "active-target" }]
-                        : []
-                    }
+                    visibleTargets={visibleTargetContexts}
                     stringSelection={state.stringSelection}
                     feedback={state.feedback}
                     missReveal={state.missReveal}
@@ -834,40 +862,42 @@ export function FretboardDropGame() {
   );
 }
 
-function useDropTargetHeightPx(): number {
-  const getTargetHeight = () => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return DROP_TARGET_HEIGHT_PX;
-    return window.matchMedia(PHONE_LANDSCAPE_MEDIA_QUERY).matches ? DROP_COMPACT_LANDSCAPE_TARGET_HEIGHT_PX : DROP_TARGET_HEIGHT_PX;
+function useDropPromptSizePx(): number {
+  const getPromptSize = () => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return DROP_PROMPT_SIZE_PX;
+    return window.matchMedia(PHONE_LANDSCAPE_MEDIA_QUERY).matches ? DROP_PROMPT_COMPACT_SIZE_PX : DROP_PROMPT_SIZE_PX;
   };
-  const [targetHeightPx, setTargetHeightPx] = useState(getTargetHeight);
+  const [promptSizePx, setPromptSizePx] = useState(getPromptSize);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
     const mediaQuery = window.matchMedia(PHONE_LANDSCAPE_MEDIA_QUERY);
-    const updateTargetHeight = () => {
-      setTargetHeightPx(mediaQuery.matches ? DROP_COMPACT_LANDSCAPE_TARGET_HEIGHT_PX : DROP_TARGET_HEIGHT_PX);
+    const updatePromptSize = () => {
+      setPromptSizePx(mediaQuery.matches ? DROP_PROMPT_COMPACT_SIZE_PX : DROP_PROMPT_SIZE_PX);
     };
 
-    updateTargetHeight();
-    mediaQuery.addEventListener("change", updateTargetHeight);
-    return () => mediaQuery.removeEventListener("change", updateTargetHeight);
+    updatePromptSize();
+    mediaQuery.addEventListener("change", updatePromptSize);
+    return () => mediaQuery.removeEventListener("change", updatePromptSize);
   }, []);
 
-  return targetHeightPx;
+  return promptSizePx;
 }
 
 function DropStage({
   cue,
-  target,
-  progress,
+  fallingTargets,
+  animationTime,
+  activeTargetId,
   combo,
   stringSelection,
   practiceContext,
   targetHeightPx,
 }: {
   cue: DropStageCue | null;
-  target: DropGameState["activeTarget"];
-  progress: number;
+  fallingTargets: readonly DropTarget[];
+  animationTime: number;
+  activeTargetId: number | null;
   combo: number;
   stringSelection: DropStringSelection;
   practiceContext: DropPracticeContext;
@@ -885,9 +915,7 @@ function DropStage({
 
   return (
     <div className={`drop-stage relative min-h-[430px] overflow-hidden rounded-lg border bg-slate-950/88 transition-colors duration-150 sm:min-h-[500px] lg:min-h-[56vh] ${cueClass}`}>
-      <div className="absolute inset-x-[18%] top-0 bottom-0 border-x border-cyan-200/10 bg-cyan-200/[0.025]" />
-      <div className="absolute inset-x-[36%] top-0 bottom-0 border-x border-cyan-200/10" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[length:100%_48px] opacity-25" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(14,165,233,0.08),transparent_42%),radial-gradient(circle_at_18%_68%,rgba(245,158,11,0.05),transparent_34%),radial-gradient(circle_at_82%_62%,rgba(14,165,233,0.05),transparent_34%)]" />
       <div className="absolute left-3 top-3 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">
         {stageCueText}
       </div>
@@ -897,15 +925,26 @@ function DropStage({
           {combo} streak
         </div>
       ) : null}
-      {target ? <FallingTarget note={target.note} progress={progress} stringIndex={target.stringIndex} targetHeightPx={targetHeightPx} /> : null}
+      {fallingTargets.map((target) => {
+        const isActive = target.id === activeTargetId;
+        const progress = getTargetProgress(target, animationTime);
+        return (
+          <NotePrompt
+            key={target.id}
+            note={target.note}
+            progress={progress}
+            stringIndex={target.stringIndex}
+            promptSizePx={targetHeightPx}
+            isActive={isActive}
+            stageXPercent={target.stageXPercent}
+            stageYPercent={target.stageYPercent}
+          />
+        );
+      })}
       {cue?.kind === "correct" || cue?.kind === "tier-up" ? <HitBurst key={cue.id} /> : null}
       {cue?.kind === "miss" ? (
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_80%,rgba(248,113,113,0.2),transparent_34%),linear-gradient(180deg,transparent_60%,rgba(248,113,113,0.12))]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(248,113,113,0.16),transparent_42%)]" />
       ) : null}
-      <div className="absolute inset-x-0 bottom-[15%] h-1.5 bg-red-400 shadow-[0_0_22px_rgba(248,113,113,0.9)]" data-hit-line />
-      <div className="absolute inset-x-0 bottom-[calc(15%+10px)] text-center text-[10px] font-black uppercase tracking-[0.28em] text-red-100">
-        hit zone
-      </div>
       {cue && cue.kind !== "miss" ? <StageCue cue={cue} /> : null}
     </div>
   );
@@ -984,7 +1023,7 @@ function DropStartScreen({
           <p className="drop-dev-note mt-2 text-xs font-semibold text-slate-500">{DEV_BUILD_NOTE}</p>
         ) : null}
         <p className="drop-start-subtitle mx-auto mt-4 max-w-lg text-lg font-semibold leading-relaxed text-slate-200">
-          Choose strings, then click the fret that makes the falling note.
+          Read the note, find it on the fretboard, and answer before the bar runs out.
         </p>
         <StringPracticeSelector value={stringSelection} onChange={onStringSelectionChange} />
         <NoteFocusSelector value={practiceContext} onChange={onPracticeContextChange} />
@@ -1398,106 +1437,139 @@ function NoteFocusSelector({
   );
 }
 
-function FallingTarget({
+function NotePrompt({
   note,
   progress,
   stringIndex,
-  targetHeightPx,
+  promptSizePx,
+  isActive,
+  stageXPercent,
+  stageYPercent,
 }: {
   note: Note;
   progress: number;
   stringIndex: DropStringIndex;
-  targetHeightPx: number;
+  promptSizePx: number;
+  isActive: boolean;
+  stageXPercent: number;
+  stageYPercent: number;
 }) {
   const accent = getStringAccent(stringIndex);
   const svgId = useId().replace(/:/g, "");
   const bodyGradientId = `${svgId}-pickGemBody`;
   const glowGradientId = `${svgId}-pickGemGlow`;
   const edgeGradientId = `${svgId}-pickGemEdge`;
+  const upcomingBodyGradientId = `${svgId}-pickGemBodyUpcoming`;
+  const upcomingGlowGradientId = `${svgId}-pickGemGlowUpcoming`;
+  const scale = isActive ? 1 : 0.9;
+  const gemSizePx = Math.round(promptSizePx * scale);
+  const timeRemaining = getPromptTimeRemaining(progress);
+  const zIndex = isActive ? 30 : 12 + Math.round(progress * 8);
+  const barWidthPx = Math.round(gemSizePx * 1.08);
 
   return (
     <div
-      className="drop-target absolute left-1/2 z-10 flex h-24 w-24 items-center justify-center text-slate-950 drop-shadow-[0_0_32px_rgba(252,211,77,0.72)] will-change-[top]"
+      className="drop-note-prompt pointer-events-none absolute flex flex-col items-center"
       style={{
-        filter: `drop-shadow(0 0 32px rgba(252,211,77,0.72)) drop-shadow(0 0 14px ${accent.glowColor})`,
-        height: targetHeightPx,
-        top: getTargetTopStyle(progress, targetHeightPx),
-        transform: "translate3d(-50%, 0, 0)",
-        width: targetHeightPx,
+        left: `${stageXPercent}%`,
+        top: `${stageYPercent}%`,
+        transform: "translate3d(-50%, -50%, 0)",
+        zIndex,
+        opacity: isActive ? 1 : 0.62,
+        width: barWidthPx,
       }}
-      aria-label={`Falling target ${note}`}
+      aria-label={`Note prompt ${note}${isActive ? " (active)" : " (upcoming)"}`}
       data-drop-target
+      data-drop-target-active={isActive ? "true" : "false"}
     >
-      <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 96 96" aria-hidden="true">
-        <defs>
-          <linearGradient id={bodyGradientId} x1="20" y1="10" x2="77" y2="88" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#fff7d6" />
-            <stop offset="0.32" stopColor="#facc15" />
-            <stop offset="0.68" stopColor="#d97706" />
-            <stop offset="1" stopColor="#7c2d12" />
-          </linearGradient>
-          <radialGradient id={glowGradientId} cx="34" cy="22" r="54" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#ffffff" stopOpacity="0.82" />
-            <stop offset="0.24" stopColor="#fde68a" stopOpacity="0.5" />
-            <stop offset="0.72" stopColor="#f59e0b" stopOpacity="0.12" />
-            <stop offset="1" stopColor="#78350f" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id={edgeGradientId} x1="25" y1="8" x2="70" y2="88" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#fffbeb" />
-            <stop offset="0.5" stopColor="#fef3c7" stopOpacity="0.62" />
-            <stop offset="1" stopColor="#92400e" stopOpacity="0.72" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M48 7 C64 7 79 17 85 32 C92 51 80 70 55 88 C51 91 45 91 41 88 C16 70 4 51 11 32 C17 17 32 7 48 7 Z"
-          fill={`url(#${bodyGradientId})`}
-        />
-        <path
-          d="M48 7 C64 7 79 17 85 32 C92 51 80 70 55 88 C51 91 45 91 41 88 C16 70 4 51 11 32 C17 17 32 7 48 7 Z"
-          fill={`url(#${glowGradientId})`}
-        />
-        <path
-          d="M48 10 C62 10 75 19 80 33 C86 49 75 66 53 83 C50 85 46 85 43 83 C21 66 10 49 16 33 C21 19 34 10 48 10 Z"
-          fill="none"
-          stroke={`url(#${edgeGradientId})`}
-          strokeWidth="3"
-        />
-        <path
-          d="M62 18 C75 26 81 38 79 50"
-          fill="none"
-          stroke={accent.color}
-          strokeLinecap="round"
-          strokeOpacity="0.7"
-          strokeWidth="3"
-        />
-        <path
-          d="M57 84 C67 76 74 68 78 59"
-          fill="none"
-          stroke={accent.color}
-          strokeLinecap="round"
-          strokeOpacity="0.45"
-          strokeWidth="4"
-        />
-        <path
-          d="M26 28 C32 18 45 14 57 17 C43 20 32 28 24 42 C22 38 23 32 26 28 Z"
-          fill="#fff7ed"
-          fillOpacity="0.54"
-        />
-        <path
-          d="M23 48 C31 63 40 73 48 81 C37 73 23 62 17 48 C18 44 20 42 23 48 Z"
-          fill="#7c2d12"
-          fillOpacity="0.18"
-        />
-      </svg>
-      <span
-        className="relative z-10 text-5xl font-black leading-none text-slate-950 drop-shadow-[0_2px_0_rgba(255,255,255,0.42)]"
+      <div
+        className={`relative flex items-center justify-center ${
+          isActive
+            ? "drop-shadow-[0_0_28px_rgba(252,211,77,0.55)]"
+            : "drop-shadow-[0_0_14px_rgba(103,232,249,0.14)]"
+        }`}
         style={{
-          fontSize: Math.round(targetHeightPx * 0.52),
-          WebkitTextStroke: "1px rgba(255,251,235,0.32)",
+          filter: isActive
+            ? `drop-shadow(0 0 24px rgba(252,211,77,0.55)) drop-shadow(0 0 10px ${accent.glowColor})`
+            : `drop-shadow(0 0 12px rgba(103,232,249,0.12))`,
+          height: gemSizePx,
+          width: gemSizePx,
         }}
       >
-        {note}
-      </span>
+        <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 96 96" aria-hidden="true">
+          <defs>
+            <linearGradient id={bodyGradientId} x1="20" y1="10" x2="77" y2="88" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#fff7d6" />
+              <stop offset="0.32" stopColor="#facc15" />
+              <stop offset="0.68" stopColor="#d97706" />
+              <stop offset="1" stopColor="#7c2d12" />
+            </linearGradient>
+            <radialGradient id={glowGradientId} cx="34" cy="22" r="54" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.82" />
+              <stop offset="0.24" stopColor="#fde68a" stopOpacity="0.5" />
+              <stop offset="0.72" stopColor="#f59e0b" stopOpacity="0.12" />
+              <stop offset="1" stopColor="#78350f" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id={edgeGradientId} x1="25" y1="8" x2="70" y2="88" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#fffbeb" />
+              <stop offset="0.5" stopColor="#fef3c7" stopOpacity="0.62" />
+              <stop offset="1" stopColor="#92400e" stopOpacity="0.72" />
+            </linearGradient>
+            <linearGradient id={upcomingBodyGradientId} x1="20" y1="10" x2="77" y2="88" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#e0f2fe" />
+              <stop offset="0.34" stopColor="#7dd3fc" />
+              <stop offset="0.72" stopColor="#0369a1" />
+              <stop offset="1" stopColor="#0c4a6e" />
+            </linearGradient>
+            <radialGradient id={upcomingGlowGradientId} cx="34" cy="22" r="54" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
+              <stop offset="0.28" stopColor="#bae6fd" stopOpacity="0.34" />
+              <stop offset="1" stopColor="#0c4a6e" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <path
+            d="M48 7 C64 7 79 17 85 32 C92 51 80 70 55 88 C51 91 45 91 41 88 C16 70 4 51 11 32 C17 17 32 7 48 7 Z"
+            fill={`url(#${isActive ? bodyGradientId : upcomingBodyGradientId})`}
+          />
+          <path
+            d="M48 7 C64 7 79 17 85 32 C92 51 80 70 55 88 C51 91 45 91 41 88 C16 70 4 51 11 32 C17 17 32 7 48 7 Z"
+            fill={`url(#${isActive ? glowGradientId : upcomingGlowGradientId})`}
+          />
+          <path
+            d="M48 10 C62 10 75 19 80 33 C86 49 75 66 53 83 C50 85 46 85 43 83 C21 66 10 49 16 33 C21 19 34 10 48 10 Z"
+            fill="none"
+            stroke={isActive ? `url(#${edgeGradientId})` : accent.color}
+            strokeOpacity={isActive ? 1 : 0.55}
+            strokeWidth="3"
+          />
+        </svg>
+        <span
+          className={`relative z-10 font-black leading-none ${
+            isActive ? "text-slate-950 drop-shadow-[0_2px_0_rgba(255,255,255,0.42)]" : "text-slate-100"
+          }`}
+          style={{
+            fontSize: Math.round(gemSizePx * 0.52),
+            WebkitTextStroke: isActive ? "1px rgba(255,251,235,0.32)" : "1px rgba(224,242,254,0.28)",
+          }}
+        >
+          {note}
+        </span>
+      </div>
+      <div
+        className={`mt-2 h-1.5 overflow-hidden rounded-full border ${
+          isActive ? "border-amber-100/35 bg-slate-900/70" : "border-cyan-100/20 bg-slate-900/55"
+        }`}
+        style={{ width: barWidthPx }}
+        aria-hidden="true"
+      >
+        <div
+          className={`h-full rounded-full ${isActive ? "bg-amber-200" : "bg-cyan-200/75"}`}
+          style={{
+            width: `${Math.round(timeRemaining * 100)}%`,
+            boxShadow: isActive ? "0 0 10px rgba(251,191,36,0.35)" : undefined,
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   recordMissedTargetCellProgress,
   recordWrongFretTap,
   recordWrongTargetCellProgress,
+  type CellResolutionSample,
 } from "./dropCellProgress";
 import type { DropTarget } from "./dropGameTypes";
 
@@ -28,6 +29,8 @@ function makeTarget(overrides: Partial<DropTarget> = {}): DropTarget {
     fret: 5,
     startedAt: 0,
     durationMs: 5_000,
+    stageXPercent: 50,
+    stageYPercent: 44,
     ...overrides,
   };
 }
@@ -100,7 +103,10 @@ describe("drop cell progress", () => {
       outcome: "correct" as const,
       hitProgress: 0.1,
     }));
-    const bounded = samples.reduce((next, sample) => appendBoundedRecentResolution(next, sample), []);
+    const bounded = samples.reduce<CellResolutionSample[]>(
+      (next, sample) => appendBoundedRecentResolution(next, sample),
+      [],
+    );
 
     expect(bounded).toHaveLength(DROP_CELL_PROGRESS_RECENT_RESOLUTION_LIMIT);
     expect(bounded[0].occurredAt).toBe(samples[1].occurredAt);

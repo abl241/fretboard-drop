@@ -12,22 +12,22 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "lucide-react": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "catalog:",
+    "@tailwindcss/vite": "^4.1.8",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "@vitejs/plugin-react": "catalog:",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.5.2",
     "happy-dom": "^15.11.7",
-    "tailwindcss": "catalog:",
+    "tailwindcss": "^4.1.8",
     "typescript": "~5.9.2",
-    "vite": "catalog:",
+    "vite": "^6.3.5",
     "vitest": "^2.1.9"
   }
 }
