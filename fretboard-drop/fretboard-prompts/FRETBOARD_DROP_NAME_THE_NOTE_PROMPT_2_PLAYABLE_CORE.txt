@@ -1,0 +1,484 @@
+FRETBOARD DROP NAME THE NOTE — PROMPT 2
+PLAYABLE CORE MODE
+
+Project source of truth
+Read and follow:
+
+doc/name-the-note/NAME_THE_NOTE_ROADMAP.md
+
+Also read:
+
+doc/name-the-note/PROMPT_1_ARCHITECTURE_AUDIT.md
+
+Treat the roadmap as the product and architecture source of truth.
+
+The wireframes in:
+
+doc/name-the-note/
+
+are visual references only. Do not attempt the full polished visual design in this prompt.
+
+Objective
+Build the first playable Name the Note mode on top of the shared target foundation created in Prompt 1.
+
+The mode should:
+
+- highlight one exact semantic fretboard position
+- ask the player to identify the note
+- let the player answer with note-name buttons
+- run for a fixed session duration
+- award score and maintain streak or combo
+- handle correct, incorrect, and timeout outcomes
+- show a basic results screen
+- preserve the current Fretboard Drop game unchanged
+
+This prompt should produce a complete playable vertical slice, not final visual polish.
+
+Important scope
+Implement:
+
+1. mode entry
+2. settings reuse
+3. exact-position prompt
+4. note-answer controls
+5. fixed-duration run
+6. per-question timeout
+7. score and streak
+8. basic feedback
+9. basic results
+10. Play Again
+
+Do not implement yet:
+
+- final percentage-based fretboard countdown visuals
+- realistic fretboard redesign
+- advanced open-string artwork
+- 0–1000 Name the Note fluency
+- weak-area practice
+- PostHog
+- daily challenge
+- mastery heat map
+- advanced replay recommendations
+- backend, auth, database, or multiplayer
+
+Before editing
+Inspect the current branch state and confirm Prompt 1 is present.
+
+Read the current implementations of:
+
+- FretboardDropExperience
+- FretboardDropGame
+- current setup or settings UI
+- current reducer or game-state model
+- current session timer
+- current score and streak logic
+- current results screen
+- canonical target utilities in src/lib/fretboardTargets.ts
+- relevant rendering helpers
+- current tests
+
+Do not perform a broad reread of unrelated files.
+
+Architecture requirements
+
+1. New mode identity
+
+Add a clear mode identity for Name the Note.
+
+Use the smallest existing routing or mode-entry pattern.
+
+Do not create a separate app.
+
+Do not build a generalized mode plugin system.
+
+The user should be able to reach:
+
+- existing Fretboard Drop
+- new Name the Note
+
+without disrupting the current entry flow.
+
+2. Shared settings
+
+Reuse the current practice settings where practical:
+
+- selected strings
+- selected notes
+- fret range
+- include open strings
+- session duration if already configurable
+
+Do not duplicate settings state if a shared settings model already exists.
+
+If the existing settings UI is tightly coupled to Fretboard Drop, create the smallest shared adapter or wrapper needed.
+
+Do not redesign the settings screen in this prompt.
+
+3. Shared target pool
+
+Use:
+
+src/lib/fretboardTargets.ts
+
+for all Name the Note eligible-target generation.
+
+Do not recalculate notes in the component.
+
+Do not introduce a second target type.
+
+The Name the Note mode must consume canonical FretboardTarget objects.
+
+4. Exact-position prompt
+
+Display one exact string-and-fret position.
+
+Requirements:
+
+- one specific string row
+- one specific fret cell
+- target remains unambiguous
+- marker fits within the exact cell
+- marker does not span multiple frets
+- marker does not highlight the whole string
+- marker does not use the whole fret column as the only cue
+
+For now, use a simple precise marker.
+
+Do not implement the polished wireframe fretboard yet.
+
+5. Open-string handling
+
+Open strings are fret 0 in the data model.
+
+For this prompt, implement the minimum clear visual treatment:
+
+- open target appears outside the numbered fretted area
+- it is aligned with the correct string
+- it is visually distinct from fret 1
+- it is clearly labeled OPEN
+
+Do not build the final polished OPEN zone yet.
+
+6. Session structure
+
+Use a fixed-duration score run.
+
+Default to 60 seconds unless the current app already has a shared compatible setting.
+
+Requirements:
+
+- no lives
+- session timer counts down
+- player answers as many questions as possible
+- run ends when session time reaches zero
+- results screen appears
+- Play Again restarts with the same settings
+
+7. Per-question timing
+
+Each target has a limited answer window.
+
+Use a simple initial timing rule compatible with the roadmap, approximately 2 to 6 seconds.
+
+Do not finalize adaptive timing in this prompt.
+
+Represent timing explicitly:
+
+- totalQuestionMs
+- remainingQuestionMs
+- countdownFraction
+
+Use:
+
+```ts
+countdownFraction = remainingQuestionMs / totalQuestionMs;
+```
+
+Even if the full visual countdown is deferred, the state must be available for Prompt 5.
+
+Use normalized percentage, not fixed-second visual bands.
+
+8. Note-answer controls
+
+Show large note buttons.
+
+Minimum:
+
+- A
+- B
+- C
+- D
+- E
+- F
+- G
+
+Requirements:
+
+- clicking a button answers immediately
+- add keyboard shortcuts when practical
+- buttons remain easy to scan
+- selected-note configuration must still control target generation
+- follow the project’s current note naming convention
+- do not introduce a complex enharmonic-preference system
+
+If the selected target is accidental under the current note model, use the simplest existing supported answer naming behavior. Do not invent a second note system.
+
+If the current project cannot support accidentals cleanly with A–G buttons, constrain the playable first version to natural notes only and document this explicitly, but preserve the underlying selected-note settings for later work.
+
+Prefer supporting the current note model if it is already straightforward.
+
+9. Answer evaluation
+
+Use canonical target.note.
+
+Use explicit outcomes:
+
+```ts
+type QuestionOutcome =
+  | "idle"
+  | "correct"
+  | "incorrect"
+  | "timeout";
+```
+
+Correct:
+
+- award score
+- continue or increase streak
+- show brief correct feedback
+- advance quickly
+
+Incorrect:
+
+- record selected wrong answer in transient state
+- reveal correct note
+- reset or update streak consistently
+- advance after a short pause
+
+Timeout:
+
+- do not treat any answer button as selected
+- reveal correct note
+- reset or update streak consistently
+- advance after a short pause
+
+Avoid long pauses.
+
+10. Score and streak
+
+Reuse the existing score philosophy where practical.
+
+Do not copy the current lives-based gameplay model.
+
+For this first version:
+
+- correct answers earn points
+- faster correct answers may earn more
+- streak or combo may multiply or supplement score
+- wrong answers and timeouts do not award points
+- scoring must be easy to understand
+- keep the implementation isolated so Prompt 3 can align it with fluency
+
+Do not change current Fretboard Drop scoring.
+
+11. Results
+
+Add a basic Name the Note results screen.
+
+Show at minimum:
+
+- final score
+- correct answers
+- incorrect answers
+- timeouts
+- accuracy
+- average correct response time
+- best streak
+- Play Again
+- Back or Exit
+
+Do not add advanced fluency, weak-area, or adaptive next-action logic yet.
+
+12. Persistence
+
+Persist only what is necessary for the playable core:
+
+- best score for Name the Note
+- last-used settings if the shared settings system already does this
+
+Use mode-specific keys.
+
+Do not write Name the Note results into current Fretboard Drop keys.
+
+Do not add full attempt history or fluency persistence yet unless the current architecture requires a minimal attempt record.
+
+13. Renderer and state boundaries
+
+Keep game state separate from rendering.
+
+The renderer should receive semantic state such as:
+
+- target
+- countdownFraction
+- outcome
+- revealedCorrectNote
+- interactionEnabled
+
+Do not calculate note identity or score inside the renderer.
+
+Do not make gameplay logic depend on CSS classes or DOM measurements.
+
+14. Current game protection
+
+Do not change:
+
+- existing Fretboard Drop behavior
+- lives
+- current target distribution
+- current score
+- current combo
+- current timing
+- current results
+- current analytics
+- current weak-area mode
+- current persistence
+- current visuals
+
+If shared extraction is needed, preserve behavior through tests.
+
+Visual direction for this prompt
+
+Keep the new mode visually compatible with the current app.
+
+Use:
+
+- current layout language
+- current typography
+- current panels
+- current button style
+- current fretboard where practical
+
+Do not implement:
+
+- realistic wood texture
+- polished metallic frets
+- ambient countdown
+- full-color outcome animation system
+- advanced glow
+- final wireframe layout
+
+Testing
+
+Add focused tests for:
+
+- mode entry
+- target generation from settings
+- exact-position identity
+- open-string target
+- correct answer
+- incorrect answer
+- timeout
+- session expiration
+- score increment
+- streak reset or continuation
+- results summary
+- Play Again
+- mode-specific best-score persistence
+- current Fretboard Drop regression coverage where practical
+
+Run:
+
+- focused tests
+- broader relevant test suite
+- typecheck
+- production build
+
+Do not use:
+
+- Playwright
+- browser automation
+- screenshot testing
+- live preview
+
+The user will manually test the browser behavior.
+
+Documentation
+
+Create:
+
+doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md
+
+Include:
+
+- files changed
+- mode entry path
+- state and reducer structure
+- scoring rules
+- question timing rule
+- open-string treatment
+- persistence keys
+- tests run
+- deferred Prompt 3 work
+- any known limitation, especially note naming or accidentals
+
+Keep it concise.
+
+Technical-debt guardrails
+
+- Do not clone FretboardDropGame into a large near-duplicate.
+- Do not force both modes into one giant component.
+- Prefer a small shared session helper only where behavior is genuinely shared.
+- Do not introduce a broad game-engine framework.
+- Do not move current code without need.
+- Do not add speculative abstractions for future modes.
+- Keep the Name the Note mode easy to trace.
+- Keep scoring, timing, target generation, rendering, and persistence separate.
+- Preserve all existing saved data.
+- Avoid comments that restate the code.
+- Avoid unrelated cleanup.
+
+Acceptance criteria
+
+This prompt is complete only when:
+
+1. The user can enter Name the Note.
+2. A fixed-duration run starts.
+3. One exact position is highlighted.
+4. Open-string targets are distinct from fretted targets.
+5. The player can answer with note buttons.
+6. Correct, incorrect, and timeout outcomes work.
+7. Score and streak update.
+8. The run ends when the session timer reaches zero.
+9. Results appear.
+10. Play Again works.
+11. Name the Note best score is mode-specific.
+12. Current Fretboard Drop behavior remains intact.
+13. Relevant tests, typecheck, and build pass.
+14. Prompt 2 documentation exists.
+15. No final countdown or realistic fretboard visual redesign is included.
+
+Final response
+
+Report:
+
+1. files changed
+2. mode entry
+3. shared logic reused
+4. session and question timing
+5. score and streak rules
+6. exact-position and open-string handling
+7. answer and feedback behavior
+8. results and persistence
+9. checks run
+10. deferred Prompt 3 work
+11. any limitation or risk
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use:
+
+TASK INCOMPLETE
+
+when requested work remains unfinished, and state the exact blocker or remaining work.

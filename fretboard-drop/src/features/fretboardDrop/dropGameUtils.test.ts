@@ -10,6 +10,8 @@ import {
   DROP_TARGET_MAX_DURATION_MS,
   DROP_TARGET_HEIGHT_PX,
   DROP_TARGET_MIN_DURATION_MS,
+  DROP_SPEED_MODE_CONFIGS,
+  DROP_SPEED_MODE_STORAGE_KEY,
   NATURAL_DROP_NOTES,
   calculateAccuracy,
   createPracticeNoteKey,
@@ -21,6 +23,7 @@ import {
   getPacingTierUpMessage,
   getPostRunSuggestion,
   getPracticeLabel,
+  getDropSpeedModeConfig,
   getStringAccent,
   getStringFocusLabel,
   getStringSelectionKey,
@@ -43,7 +46,9 @@ import {
   makeFocusDropTarget,
   normalizePracticeContext,
   readBestDropScore,
+  readDropSpeedMode,
   writeBestDropScore,
+  writeDropSpeedMode,
 } from "./dropGameUtils";
 
 describe("Fretboard Drop utilities", () => {
@@ -284,6 +289,49 @@ describe("Fretboard Drop utilities", () => {
         })).toBeLessThanOrEqual(DROP_TARGET_MAX_DURATION_MS);
       }
     }
+  });
+
+  it("centralizes the Fretboard Drop speed-mode timing windows", () => {
+    expect(DROP_SPEED_MODE_CONFIGS.map((config) => [config.id, config.targetDurationMs])).toEqual([
+      ["warm-up", 7000],
+      ["practice-tempo", 4000],
+      ["performance-tempo", 2500],
+    ]);
+    expect(getDropSpeedModeConfig("warm-up").label).toBe("Warm-Up");
+    expect(getDropDurationMs(0, { elapsedMs: 20_000, seed: 4, speedMode: "warm-up" })).toBeGreaterThan(
+      getDropDurationMs(0, { elapsedMs: 20_000, seed: 4, speedMode: "practice-tempo" }),
+    );
+    expect(getDropDurationMs(0, { elapsedMs: 20_000, seed: 4, speedMode: "practice-tempo" })).toBeGreaterThan(
+      getDropDurationMs(0, { elapsedMs: 20_000, seed: 4, speedMode: "performance-tempo" }),
+    );
+  });
+
+  it("persists speed mode and defaults returning legacy users to Practice Tempo", () => {
+    window.localStorage.clear();
+    expect(readDropSpeedMode()).toBe("warm-up");
+
+    writeDropSpeedMode("performance-tempo");
+    expect(window.localStorage.getItem(DROP_SPEED_MODE_STORAGE_KEY)).toBe("performance-tempo");
+    expect(readDropSpeedMode()).toBe("performance-tempo");
+
+    window.localStorage.clear();
+    writeBestDropScore(9, [0]);
+    expect(readDropSpeedMode()).toBe("practice-tempo");
+  });
+
+  it("stores best scores separately by speed mode while preserving legacy Practice Tempo fallback", () => {
+    window.localStorage.clear();
+    writeBestDropScore(12, [0]);
+
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo")).toBe(12);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "warm-up")).toBe(0);
+
+    writeBestDropScore(5, [0], DEFAULT_DROP_PRACTICE_CONTEXT, "warm-up");
+    writeBestDropScore(8, [0], DEFAULT_DROP_PRACTICE_CONTEXT, "performance-tempo");
+
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "warm-up")).toBe(5);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "performance-tempo")).toBe(8);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo")).toBe(12);
   });
 
   it("uses clear combo-based pacing tiers", () => {

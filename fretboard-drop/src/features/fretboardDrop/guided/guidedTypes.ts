@@ -1,7 +1,7 @@
 import type { Note } from "@/lib/fretboard";
 import type { DropStringIndex } from "../dropGameTypes";
 
-export type GuidedPreferredMode = "guided" | "free-play";
+export type GuidedPreferredMode = "guided" | "free-play" | "name-the-note";
 
 export type GuidedStepId =
   | "a"

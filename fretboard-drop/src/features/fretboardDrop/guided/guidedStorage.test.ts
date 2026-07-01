@@ -23,6 +23,9 @@ describe("guidedStorage", () => {
 
     writeGuidedPreferredMode("free-play");
     expect(readGuidedPreferredMode()).toBe("free-play");
+
+    writeGuidedPreferredMode("name-the-note");
+    expect(readGuidedPreferredMode()).toBe("name-the-note");
   });
 
   it("falls back safely when guided storage is malformed", () => {

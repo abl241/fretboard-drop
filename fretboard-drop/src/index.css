@@ -63,6 +63,10 @@ button {
   animation: horizontal-deadline-correct-fade 160ms ease-out both;
 }
 
+.horizontal-deadline-pick--final-second {
+  animation: horizontal-deadline-final-second 720ms ease-in-out infinite;
+}
+
 .horizontal-deadline-pick-body {
   border: 2px solid rgba(255, 251, 235, 0.72);
   border-radius: 48% 52% 56% 44% / 38% 38% 62% 62%;
@@ -137,6 +141,21 @@ button {
   }
 }
 
+@keyframes horizontal-deadline-final-second {
+  0%,
+  100% {
+    filter:
+      drop-shadow(0 0 18px rgba(251, 191, 36, 0.28))
+      drop-shadow(0 0 8px currentColor);
+  }
+
+  50% {
+    filter:
+      drop-shadow(0 0 24px rgba(251, 191, 36, 0.42))
+      drop-shadow(0 0 12px currentColor);
+  }
+}
+
 @keyframes horizontal-deadline-fragment {
   0% {
     opacity: 0.86;
@@ -169,6 +188,10 @@ button {
   .horizontal-deadline-pick--resolved-correct {
     animation-duration: 120ms;
     transform: translate3d(-100%, -50%, 0);
+  }
+
+  .horizontal-deadline-pick--final-second {
+    animation: none;
   }
 
   .horizontal-deadline-fragment {

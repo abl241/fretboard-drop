@@ -1,5 +1,5 @@
-import type { DropPracticeContext, DropStringSelection } from "./dropGameTypes";
-import { createPracticeNoteKey, getStringSelectionKey } from "./dropGameUtils";
+import type { DropPracticeContext, DropSpeedMode, DropStringSelection } from "./dropGameTypes";
+import { DEFAULT_RETURNING_DROP_SPEED_MODE, createPracticeNoteKey, getStringSelectionKey } from "./dropGameUtils";
 
 export const DROP_FLUENCY_SCORE_VERSION = "v1";
 export const DROP_BEST_FLUENCY_SCORE_KEY = `fretboard-drop:best-fluency-score:${DROP_FLUENCY_SCORE_VERSION}`;
@@ -91,11 +91,14 @@ export function getNextFluencyScoreLabelTarget(score: number): { minScore: numbe
 function getBestFluencyScoreStorageKey(
   selection: DropStringSelection,
   practiceContext: DropPracticeContext,
+  speedMode?: DropSpeedMode,
 ): string {
   const stringKey = getStringSelectionKey(selection);
   const practiceKey = createPracticeNoteKey(practiceContext);
-  if (practiceKey === "all-naturals") return `${DROP_BEST_FLUENCY_SCORE_KEY}:strings:${stringKey}`;
-  return `${DROP_BEST_FLUENCY_SCORE_KEY}:strings:${stringKey}:practice:${practiceKey}`;
+  const baseKey = practiceKey === "all-naturals"
+    ? `${DROP_BEST_FLUENCY_SCORE_KEY}:strings:${stringKey}`
+    : `${DROP_BEST_FLUENCY_SCORE_KEY}:strings:${stringKey}:practice:${practiceKey}`;
+  return speedMode ? `${baseKey}:speed:${speedMode}` : baseKey;
 }
 
 function parseStoredBestFluencyScore(raw: string | null): number {
@@ -106,8 +109,12 @@ function parseStoredBestFluencyScore(raw: string | null): number {
 export function readBestFluencyScore(
   selection: DropStringSelection,
   practiceContext: DropPracticeContext,
+  speedMode?: DropSpeedMode,
 ): number {
   try {
+    const scopedScore = parseStoredBestFluencyScore(window.localStorage.getItem(getBestFluencyScoreStorageKey(selection, practiceContext, speedMode)));
+    if (scopedScore > 0) return scopedScore;
+    if (speedMode && speedMode !== DEFAULT_RETURNING_DROP_SPEED_MODE) return 0;
     return parseStoredBestFluencyScore(window.localStorage.getItem(getBestFluencyScoreStorageKey(selection, practiceContext)));
   } catch {
     return 0;
@@ -118,9 +125,10 @@ export function writeBestFluencyScore(
   score: number,
   selection: DropStringSelection,
   practiceContext: DropPracticeContext,
+  speedMode?: DropSpeedMode,
 ): void {
   try {
-    window.localStorage.setItem(getBestFluencyScoreStorageKey(selection, practiceContext), String(clamp(Math.round(score), 0, 1000)));
+    window.localStorage.setItem(getBestFluencyScoreStorageKey(selection, practiceContext, speedMode), String(clamp(Math.round(score), 0, 1000)));
   } catch {
     // Fluency best is nice-to-have local state only.
   }

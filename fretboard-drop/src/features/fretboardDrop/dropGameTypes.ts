@@ -49,6 +49,8 @@ export type DropTarget = {
 
 export type DropRunMode = "normal" | "focus";
 
+export type DropSpeedMode = "warm-up" | "practice-tempo" | "performance-tempo";
+
 export type DropFocusPoolCell = {
   cellId: FretboardCellId;
   note: Note;
@@ -105,6 +107,7 @@ export type DropGameState = {
   stringSelection: DropStringSelection;
   practiceContext: DropPracticeContext;
   runMode: DropRunMode;
+  speedMode: DropSpeedMode;
   focusPool: readonly DropFocusPoolCell[];
   bestScoreAtStart: number;
 };
@@ -122,5 +125,6 @@ export type DropGameResult = {
   isNewPersonalBest: boolean;
   isNewFluencyBest: boolean;
   runMode: DropRunMode;
+  speedMode: DropSpeedMode;
   focusPoolSize: number;
 };

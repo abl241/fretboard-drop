@@ -1,0 +1,428 @@
+FRETBOARD DROP — NAME THE NOTE MVP CORRECTION
+RANDOMIZED TARGETS, LARGER FRETBOARD, ANSWER-BUTTON COUNTDOWN, AND RETRY AFTER WRONG ANSWERS
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+Primary files to inspect first:
+
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.tsx`
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.test.tsx`
+- `src/lib/fretboardTargets.ts`
+- `doc/name-the-note/NAME_THE_NOTE_ROADMAP.md`
+- `doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md`
+- the wireframe images in `doc/name-the-note/`
+
+Context
+
+The playable Name the Note mode works, but manual testing exposed four MVP problems:
+
+1. Target selection is deterministic, so runs repeat the same sequence and appear to move systematically through strings/frets.
+2. The fretboard is too small and does not match the approved wireframe proportions.
+3. The most recent correction made the fretboard itself change colors as the per-question countdown. That is no longer wanted.
+4. A wrong answer currently reveals the correct answer and ends the question. The desired behavior is to let the player try again while time continues.
+
+Keep this as a focused MVP correction. Do not add elaborate effects, new systems, or the later realistic fretboard renderer.
+
+ROOT CAUSE ALREADY IDENTIFIED
+
+The current selector is deterministic:
+
+```ts
+function selectNameTheNoteTarget(
+  pool: readonly FretboardTarget[],
+  seed: number,
+  previousTargetKey?: string,
+): FretboardTarget {
+  const index = Math.abs(seed * 7 + 3) % pool.length;
+  ...
+}
+```
+
+The seed starts at 0 every run and increases predictably, so every run follows the same mathematical sequence over a canonically ordered pool.
+
+Replace this approach. Do not merely change the multiplier or offset.
+
+OBJECTIVE
+
+Deliver a corrected Name the Note MVP with:
+
+- genuinely randomized but well-distributed targets
+- a larger, wireframe-aligned fretboard
+- no fretboard color-changing countdown
+- draining color inside the A–G answer buttons
+- a small numeric per-question countdown
+- retry after wrong answers without revealing the correct answer
+- existing run duration, score framework, settings, results, persistence, and original Fretboard Drop behavior preserved unless explicitly changed below
+
+1. REPLACE DETERMINISTIC TARGET SELECTION WITH A SHUFFLED DECK
+
+Use a simple shuffled-deck model.
+
+Required behavior:
+
+- Build the eligible target pool from the current settings.
+- Shuffle the pool with Fisher-Yates at the beginning of each run.
+- Draw targets one by one from the shuffled deck.
+- When the deck is exhausted, reshuffle the same eligible pool.
+- Prevent the first target of a newly shuffled deck from matching the immediately previous target when more than one eligible target exists.
+- Every new run should use a newly shuffled order.
+- Do not allow a deterministic fixed sequence that restarts identically each run.
+- Preserve exact target identity through `targetKey`.
+- Preserve OPEN targets as fret 0 in the separate OPEN zone.
+
+Implementation guidance:
+
+- Remove `targetSeed` if it is no longer needed.
+- Replace `selectNameTheNoteTarget(pool, seed, ...)` with a small pure shuffle/deck helper.
+- Keep the solution simple and local to Name the Note unless an existing generic shuffle helper is already appropriate.
+- Accept an optional RNG function in the pure shuffle helper for deterministic tests, for example:
+  `shuffleTargets(targets, rng = Math.random)`.
+- Do not add a library for shuffling.
+- Do not use crypto APIs.
+- Do not introduce a broad game-engine abstraction.
+
+Tests must prove:
+
+- a run draws from a shuffled deck rather than the old arithmetic sequence
+- every eligible target appears once before the deck repeats
+- immediate duplicates are prevented across a deck reshuffle when possible
+- a deterministic injected RNG makes tests stable
+- starting a new production run does not intentionally reset to the same fixed order
+
+2. REMOVE FRETBOARD COLOR COUNTDOWN
+
+Remove the broad ambient fretboard countdown styling added in Prompt 2A.
+
+Remove or stop using code such as:
+
+- `NameTheNoteCountdownBand`
+- `getCountdownBand`
+- `interpolateColor`
+- `getCountdownAmbientColor`
+- `getNameTheNoteCountdownSurface`
+- `data-countdown-band`
+- inline fretboard styles derived from `countdownFraction`
+
+The fretboard should remain visually stable during the question.
+
+Do not replace this with:
+
+- another progress bar
+- a ring timer
+- a whole-neck sweep
+- full-screen color changes
+- flashing fretboard colors
+- an elaborate animation system
+
+Preserve `countdownFraction` as semantic game state because the answer-button fill will use it.
+
+3. SHOW QUESTION TIME BY DRAINING COLOR INSIDE THE ANSWER BUTTONS
+
+Use the seven A–G answer buttons as the primary visual countdown.
+
+Required behavior:
+
+- Each answer button has a stable letter that remains fully readable throughout.
+- A colored fill sits behind the letter.
+- The fill begins full at the start of each question.
+- The fill drains vertically and continuously as `countdownFraction` decreases.
+- The same countdown fraction should be shown consistently across all currently available answer buttons.
+- The letter must stay above the fill with strong contrast.
+- Button size, letter position, and button outline remain stable.
+- Keep a small numeric per-question countdown as a secondary cue.
+- The numeric countdown should represent the current question, not only the total 60-second run.
+- Retain the existing total-run timer in the top bar if already present, but clearly distinguish it from the small question countdown.
+
+Preferred simple implementation:
+
+- one absolutely positioned fill layer inside each answer button
+- fill height or scale derived from `countdownFraction`
+- `transform-origin: bottom` or a clear top-to-bottom drain
+- letter rendered in a higher z-index
+- no canvas, SVG animation framework, or particle system
+
+The drain must remain visible even when a wrong answer has been attempted.
+
+4. WRONG ANSWER MUST ALLOW ANOTHER TRY
+
+Change wrong-answer behavior.
+
+Current unwanted behavior:
+
+- wrong answer sets terminal `outcome: "incorrect"`
+- correct note is revealed
+- question advances after a delay
+
+Required behavior:
+
+- A wrong answer does not end the question.
+- Do not reveal the correct answer after a wrong guess.
+- Keep the same target active.
+- Keep the question countdown running without resetting.
+- Allow the player to choose another answer immediately.
+- Mark the attempted wrong letter red or otherwise clearly incorrect.
+- Disable that wrong letter for the remainder of the current question so the player does not repeat it accidentally.
+- Other answer buttons remain enabled.
+- Support more than one wrong attempt on the same question.
+- Clear the attempted-wrong-answer set when the next target begins.
+
+Recommended data model:
+
+- replace the single terminal wrong-answer state with something like:
+  `wrongAnswers: readonly Note[]`
+- keep terminal outcomes only for:
+  - idle/in-progress
+  - correct
+  - timeout
+- If retaining `incorrect` as an outcome for compatibility, it must not be terminal and must not trigger answer reveal or question advance. Prefer the simpler clean model.
+
+Scoring and streak:
+
+- Incorrect attempt count should increment for each wrong button press.
+- Do not award points for wrong attempts.
+- Do not reveal the correct answer.
+- Keep the current streak behavior as simple as possible:
+  - a wrong attempt resets the current streak
+  - a later correct answer on the same target may still earn base/speed points
+  - after one or more wrong attempts, do not increment the streak for that target
+- Avoid inventing a complicated penalty system.
+- Correct on first attempt continues/increments streak as before.
+- Timeout resets streak.
+
+Correct answer:
+
+- marks the selected correct button green
+- awards score
+- advances after the existing brief correct delay
+
+Timeout:
+
+- ends the question
+- reveals the correct letter only after time reaches zero
+- advances after the existing timeout/reveal delay
+- no wrong answer should be falsely shown as selected
+
+5. ENLARGE THE FRETBOARD TO MATCH THE WIREFRAME PROPORTIONS
+
+Review the wireframe images in `doc/name-the-note/`.
+
+The fretboard must become the dominant gameplay surface.
+
+Current issues visible in manual testing:
+
+- excessive empty space
+- `max-w-7xl` constrains the whole run screen
+- gameplay content is vertically centered with large unused space
+- each string row is too short
+- the target is too small
+- fret cells are compressed
+- the answer panel competes visually with the fretboard
+
+Required layout changes during active gameplay:
+
+- use nearly the full available desktop width
+- remove or substantially relax the active run-screen width cap
+- keep setup/results widths sensible, but do not force the run screen into the same narrow card
+- reduce unnecessary outer horizontal padding during gameplay
+- substantially increase fretboard height
+- increase string-row height
+- enlarge the exact target marker while keeping it fully inside one cell
+- preserve all 6 string rows
+- preserve fret numbers 1–11
+- preserve the distinct OPEN zone before the nut
+- keep the answer buttons close beneath the fretboard
+- reduce unused vertical space above and below the gameplay area
+- keep the top stats bar compact
+- maintain responsive behavior on narrower screens without horizontal page overflow
+
+Do not:
+
+- add realistic fretboard textures or assets
+- redesign the entire visual system
+- change the core route or shell
+- alter original Fretboard Drop layout
+- make target cells overlap neighboring frets
+- highlight the whole string or whole fret column
+
+The target must still identify exactly one string-and-fret cell.
+
+6. PRESERVE EXISTING MVP BEHAVIOR
+
+Do not change unless required above:
+
+- 60-second run duration
+- 4-second initial question duration
+- current setup filters
+- selected strings
+- selected notes
+- include-open-strings option
+- canonical target model
+- current best-score localStorage key
+- Play Again
+- Back behavior
+- results screen structure
+- keyboard A–G answering
+- existing original Fretboard Drop gameplay
+- Guided Learning
+- Prompt 1 shared target foundation
+
+7. RESULT METRICS
+
+Because multiple wrong attempts can now occur on one target:
+
+- `incorrect` should represent total wrong attempts
+- `timeouts` should represent timed-out questions
+- `correct` should represent successfully completed targets
+- accuracy must use a clearly documented denominator
+
+Use a simple, sensible MVP definition and document it.
+
+Preferred:
+
+`correct / (correct + incorrect attempts + timeouts)`
+
+Do not create multiple new accuracy metrics in this prompt.
+
+8. TESTING
+
+Update focused tests to cover:
+
+Randomization:
+
+- old fixed arithmetic target sequence is gone
+- shuffled deck covers all eligible targets before repeating
+- reshuffle avoids immediate duplicate when possible
+- injected RNG makes unit tests deterministic
+
+Wrong-answer retry:
+
+- wrong answer does not reveal the correct note
+- wrong answer does not advance the target
+- wrong button becomes disabled or clearly unavailable
+- another answer can be chosen on the same target
+- countdown continues after a wrong answer
+- correct after a wrong answer completes the target
+- timeout reveals the correct note
+- wrong-answer state clears on the next target
+
+Countdown:
+
+- fretboard no longer receives countdown color-band styling
+- no conventional per-question progress bar is rendered
+- answer buttons receive a fill amount derived from `countdownFraction`
+- answer letters remain present and readable
+- small per-question numeric countdown is rendered
+
+Layout:
+
+- exact fretted target still renders in one cell
+- OPEN target remains outside the numbered fretted area
+- avoid brittle pixel-perfect tests
+- use semantic classes/test IDs only where helpful
+
+Regression:
+
+- existing session completion
+- Play Again
+- best-score persistence
+- original Fretboard Drop tests
+- Guided entry behavior
+
+Run:
+
+- focused Name the Note tests
+- broader relevant Fretboard Drop tests
+- full test suite
+- typecheck
+- production build
+
+Do not use:
+
+- Playwright
+- browser automation
+- screenshot testing
+- live preview
+
+The user will manually verify the visual result.
+
+9. DOCUMENTATION
+
+Update:
+
+- `doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md`
+
+Document:
+
+- deterministic seed-based selection was replaced by shuffled-deck selection
+- wrong answers now permit retries without revealing the correct answer
+- answer-button fill now communicates question time
+- broad fretboard color countdown was removed
+- fretboard proportions were enlarged to align more closely with the wireframe
+- any intentionally deferred visual polish
+
+Do not create another roadmap.
+
+10. SCOPE AND ENGINEERING PRINCIPLES
+
+Apply:
+
+- Krug: the target and answer action must be immediately obvious
+- Tufte: visual elements should communicate actual game state
+- Jobs: keep the experience focused and satisfying, but do not overbuild the MVP
+- Pike/Thompson: use the smallest clear solution with minimal new abstractions
+
+Do not overcomplicate.
+
+Do not add:
+
+- backend
+- authentication
+- analytics
+- microphone input
+- particle engine
+- global state library
+- new persistence schema
+- realistic renderer
+- unrelated refactors
+
+ACCEPTANCE CRITERIA
+
+Complete only when:
+
+1. A new run no longer follows the old fixed seed sequence.
+2. Targets are drawn from a shuffled deck and distributed without repeats until the deck is exhausted.
+3. The active fretboard no longer changes ambient color with the countdown.
+4. A–G answer buttons visibly drain with question time while letters remain readable.
+5. A small numeric per-question countdown remains visible.
+6. A wrong answer does not reveal the correct answer.
+7. The same target remains active after a wrong answer.
+8. The player can try another letter while time continues.
+9. Only timeout reveals the correct answer when no correct answer was given.
+10. The fretboard is substantially larger and closer to the approved wireframe proportions.
+11. OPEN targets and exact-cell targeting remain correct.
+12. Existing Name the Note session, results, persistence, and original Fretboard Drop behavior remain intact.
+13. Tests, typecheck, and production build pass.
+14. Documentation is updated.
+
+FINAL RESPONSE
+
+Report:
+
+1. root cause of repeated target patterns
+2. exact target-selection change
+3. wrong-answer retry behavior
+4. answer-button countdown implementation
+5. fretboard layout changes
+6. files changed
+7. tests and checks run
+8. limitations or deferred visual polish
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use:
+
+TASK INCOMPLETE
+
+when requested work remains unfinished, and state the exact blocker or remaining work.

@@ -1,0 +1,104 @@
+FRETBOARD DROP: ADD GUITAR-THEMED SPEED MODES
+
+Goal:
+Add three selectable timing modes to the current fretboard-learning game so the pace is appropriate for different skill levels, while preserving the existing gameplay, note/string/fret filters, scoring, results flow, and current visual style.
+
+Use these mode names and meanings:
+
+1. Warm-Up
+   - Beginner-friendly
+   - Generous thinking time
+   - Target answer window: about 7 seconds
+
+2. Practice Tempo
+   - Intermediate
+   - Moderate pressure
+   - Target answer window: about 4 seconds
+   - Make this the default for returning users unless no prior setting exists
+
+3. Performance Tempo
+   - Advanced
+   - Rapid recall
+   - Target answer window: about 2.5 seconds
+
+Requirements:
+
+1. Add a clear speed-mode selector in the existing game setup area.
+   - Use the guitar-oriented names above.
+   - Include a short plain-language description for each mode.
+   - Keep the UI compact and obvious.
+   - Do not label the player as Beginner, Intermediate, or Advanced.
+   - The mode describes the exercise tempo, not the user.
+
+2. Persist the selected speed mode in localStorage.
+   - If the user has never selected a mode before, default to Warm-Up for a first-time user.
+   - After the user selects a mode, remember it for future sessions.
+
+3. Apply the selected timing mode consistently to the current round timer.
+   - Warm-Up: approximately 7 seconds
+   - Practice Tempo: approximately 4 seconds
+   - Performance Tempo: approximately 2.5 seconds
+   - Keep these values centralized in one configuration object or similar simple structure.
+   - Do not scatter timing constants across multiple files.
+
+4. Add a subtle final-second pressure cue.
+   - During the final second, gently pulse or emphasize the active target or timer.
+   - Keep the effect restrained and readable.
+   - Do not add distracting animation.
+
+5. Preserve the current timeout behavior unless a small adjustment is required to support the new modes.
+   - A timeout should still reveal or communicate the correct answer clearly.
+   - Do not make timeout feel punitive.
+   - Do not remove lives, change wrong-click behavior, or alter unrelated game rules.
+
+6. Statistics and results:
+   - Do not combine records from different speed modes into a single misleading high score.
+   - Track at minimum the active mode with each completed run.
+   - Show the selected speed mode on the Results screen.
+   - Where the app already stores personal bests, streaks, or accuracy, separate those records by speed mode.
+   - Preserve existing historical data when possible.
+   - If existing saved records do not include a speed mode, treat them as legacy/default records without breaking loading.
+   - Do not build a complex new analytics system.
+
+7. Keep scope narrow.
+   - Do not add backend, auth, database, microphone input, leaderboards, daily challenges, curriculum systems, or unrelated visual redesigns.
+   - Do not change the note, string, or fret restriction controls except where needed to place the speed selector cleanly.
+   - Do not modify unrelated GuitarRise or Transcribe code.
+   - Do not broadly refactor the game architecture.
+
+Implementation guidance:
+- First inspect the current timing, setup controls, localStorage persistence, scoring, and Results screen.
+- Prefer the smallest safe change.
+- Reuse existing components and patterns.
+- Keep timing configuration simple and typed.
+- Preserve current one-string mode, target generation, click handling, miss handling, Results, and Play Again behavior.
+- Follow the project principles of obvious navigation, low clutter, polished restraint, and minimal abstraction.
+- Do not overcomplicate.
+
+Validation:
+- Run the existing typecheck.
+- Run existing tests.
+- Run the production build.
+- Do not use browser automation, Playwright, screenshot testing, or live-preview testing.
+- Report any pre-existing failures separately from failures caused by this task.
+
+Final response:
+Report:
+1. Files changed
+2. Where the timing mode configuration lives
+3. Exact timing values used
+4. How localStorage persistence works
+5. How statistics or personal bests are separated by mode
+6. Typecheck result
+7. Test result
+8. Build result
+
+End the final response with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if all requested code changes and checks are finished. Otherwise end with:
+
+TASK INCOMPLETE
+
+and state the exact remaining work or blocker.

@@ -1,3 +1,5 @@
+import type { DropSpeedMode } from "./dropGameTypes";
+
 export const DROP_RUN_HISTORY_STORAGE_KEY = "fretboard-drop:run-history:v1";
 export const DROP_RUN_HISTORY_MAX_PER_CONTEXT = 10;
 export const DROP_RUN_HISTORY_DISPLAY_COUNT = 5;
@@ -8,6 +10,7 @@ export type DropRunHistoryEntry = {
   fluencyScoreLabel: string;
   notesFound: number;
   accuracy: number;
+  speedMode?: DropSpeedMode;
   averageHitProgress?: number;
 };
 
@@ -40,6 +43,7 @@ function normalizeEntry(entry: DropRunHistoryEntry): DropRunHistoryEntry {
     fluencyScoreLabel: entry.fluencyScoreLabel,
     notesFound: Math.max(0, Math.round(entry.notesFound)),
     accuracy: Math.min(100, Math.max(0, Math.round(entry.accuracy))),
+    ...(entry.speedMode ? { speedMode: entry.speedMode } : {}),
     ...(averageHitProgress === undefined ? {} : { averageHitProgress }),
   };
 }

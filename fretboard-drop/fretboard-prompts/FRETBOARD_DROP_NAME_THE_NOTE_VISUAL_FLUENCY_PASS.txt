@@ -1,0 +1,568 @@
+FRETBOARD DROP — NAME THE NOTE VISUAL AND FLUENCY PASS
+COMPACT LAYOUT, REALISTIC FRET SPACING, TAPERED NECK, STRING GAUGES, COMPACT ANSWERS, AND 0–1000 FLUENCY
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+Primary files to inspect first:
+
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.tsx`
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.test.tsx`
+- `src/features/fretboardDrop/dropFluencyScore.ts`
+- `src/lib/fretboardTargets.ts`
+- `doc/name-the-note/NAME_THE_NOTE_ROADMAP.md`
+- `doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md`
+- the wireframe images in `doc/name-the-note/`
+
+Context
+
+The current Name the Note MVP now has:
+
+- randomized shuffled-deck targets
+- retry after wrong answers
+- draining answer-button color
+- a larger fretboard
+- working run scoring
+- passing tests
+
+Manual review found the next issues:
+
+1. The fretboard is now too tall and visually sparse.
+2. String spacing is too large.
+3. String gauges do not differ from thin high E to thick low E.
+4. Frets are still equal width, but fret 1 should be wider than fret 11.
+5. The neck should taper slightly, narrower near the nut and wider toward higher frets.
+6. The answer buttons are too large and spread across the full screen, causing excessive mouse travel.
+7. The current score is only an unexplained arcade point total.
+8. Name the Note still lacks the promised mode-specific 0–1000 fluency score.
+
+Keep this as a focused visual and scoring pass. Do not build the later realistic fretboard renderer, particle effects, audio, analytics, or unrelated systems.
+
+OBJECTIVE
+
+Deliver a more polished Name the Note MVP that:
+
+- matches the wireframe proportions more closely
+- looks more like a guitar fretboard
+- keeps the target as the dominant focal point
+- makes answer selection compact and fast
+- clearly separates Run Points from 0–1000 Fluency
+- preserves all current gameplay behavior
+
+1. COMPACT THE ACTIVE GAME LAYOUT
+
+The current fretboard is too tall and consumes too much vertical space.
+
+Required changes:
+
+- remove any layout rule that forces the fretboard to consume the remaining viewport height
+- use a bounded fretboard height
+- tighten vertical spacing between strings
+- reduce unnecessary empty space above and below the neck
+- keep the answer group directly beneath the fretboard
+- keep the top bar compact
+- preserve responsive behavior
+- do not create horizontal page overflow
+
+Desktop target proportions:
+
+- fretboard height approximately 280 to 340 px
+- string rows approximately 38 to 48 px
+- answer group close beneath the fretboard
+- active game centered in the usable screen area
+
+Do not copy exact numbers blindly. Match the wireframe hierarchy and verify the proportions in code.
+
+2. ADD REALISTIC FRET SPACING
+
+Current fret columns appear equal width. Replace this with progressively narrower fret spacing.
+
+Required behavior:
+
+- fret 1 is the widest visible fret space
+- each subsequent fret space is slightly narrower
+- fret 11 is clearly narrower than fret 1
+- use a musically plausible exponential fret-spacing model
+- preserve fret identities 1 through 11
+- preserve OPEN as a separate zone before the nut
+- preserve target identity and keyboard behavior
+
+Preferred implementation:
+
+- calculate normalized fret-position boundaries using the standard equal-temperament relationship
+- for fret number `n`, use a position proportional to:
+  `1 - 2^(-n/12)`
+- normalize visible fret positions so frets 1 through 11 fill the available fretted width
+- derive each fret cell width from adjacent normalized boundaries
+
+Do not hard-code eleven unrelated percentages.
+
+Do not change scoring, target selection, or note mapping.
+
+3. ADD A SUBTLE NECK TAPER
+
+The neck should be slightly narrower near the nut and wider toward fret 11.
+
+Required behavior:
+
+- nut side is slightly narrower vertically
+- higher-fret side is slightly wider vertically
+- taper should be restrained
+- approximately 88% to 92% of full height near the nut and 100% at the far end is a reasonable visual target
+- strings remain visually centered within the tapered neck
+- fret lines span the local neck height
+- target remains aligned with the correct string and fret
+- OPEN zone remains distinct
+
+Preferred implementation:
+
+- use a clipped or masked outer neck shape
+- keep game logic and target identity independent of the visual taper
+- do not rewrite click or target math unless the current layout requires a small isolated coordinate adjustment
+- avoid a broad SVG renderer rewrite
+
+The taper must not distort logical targeting.
+
+4. DIFFERENTIATE STRING GAUGES
+
+Use progressively thicker strings from high E to low E.
+
+Suggested visual gauges:
+
+- string 1, high E: about 1 px
+- string 2, B: about 1.25 px
+- string 3, G: about 1.5 px
+- string 4, D: about 2 px
+- string 5, A: about 2.5 px
+- string 6, low E: about 3 px
+
+Required behavior:
+
+- thicker strings remain centered on the same logical row
+- gauge differences do not shift target positions
+- high E is visibly thinnest
+- low E is visibly thickest
+- use restrained metallic highlights or shadows
+- wound strings may be slightly warmer or darker, but do not overstyle them
+- do not affect game logic
+
+5. IMPROVE FRETS, NUT, AND TARGET HIERARCHY
+
+Apply restrained visual hierarchy.
+
+Required behavior:
+
+- nut is strongest
+- fret wires are medium emphasis
+- outer frame is weakest
+- fret numbers are small but legible
+- fret markers remain visible but subordinate
+- target is the strongest element on the neck
+- target glow is localized to one exact cell
+- target does not highlight the full string or full fret column
+
+Target treatment:
+
+- retain a compact circular or localized marker
+- use a thinner outline
+- reduce the heavy flat yellow appearance
+- add one restrained local glow
+- keep exact position unmistakable
+- preserve the OPEN target behavior
+
+Do not add particle effects, animated strings, or large decorative bursts.
+
+6. LIGHTEN VISUAL CHROME
+
+The current screen has too many heavy framed boxes.
+
+Required changes:
+
+- reduce border weight around top bar, fretboard container, and answer panel
+- remove unnecessary nested rectangles
+- reserve strong contrast for:
+  - target
+  - active countdown fill
+  - correct feedback
+  - wrong feedback
+  - timeout reveal
+- keep inactive frames quiet
+- do not remove useful grouping entirely
+
+7. COMPACT AND CENTER THE A–G ANSWER CONTROLS
+
+Current buttons stretch across the full screen and require too much pointer travel.
+
+Required behavior:
+
+- center the answer group beneath the fretboard
+- use a bounded total width
+- keep all seven buttons on one row at normal desktop widths
+- use Name the Note display order:
+  `A B C D E F G`
+- do not change the canonical note pool or the original Fretboard Drop order
+- preserve keyboard shortcuts
+- preserve draining fill
+- preserve wrong-answer disabled state
+- preserve correct and timeout behavior
+
+Desktop target sizing:
+
+- total answer group width approximately 650 to 800 px
+- button width approximately 76 to 96 px
+- button height approximately 48 to 56 px
+- gap approximately 8 to 12 px
+- letter size approximately 20 to 28 px
+
+Implementation options:
+
+- centered `flex` with fixed or bounded button widths
+- centered seven-column grid with a sensible `max-width`
+
+Do not use full-width `1fr` columns across the entire page.
+
+8. IMPROVE THE ANSWER-BUTTON COUNTDOWN
+
+Preserve the existing draining fill, but make it visually clearer.
+
+Required behavior:
+
+- fill drains in one consistent vertical direction
+- moving boundary is crisp
+- filled and emptied regions have stronger contrast
+- letter remains fully readable
+- letter opacity does not change
+- wrong disabled buttons remain understandable
+- small numeric question countdown remains visible
+- no fretboard color countdown
+- no conventional progress bar
+
+9. SIMPLIFY THE ACTIVE TOP BAR
+
+During play, show only the most useful information prominently.
+
+Required hierarchy:
+
+- Run Points
+- Streak
+- Run Time
+
+Secondary values such as best score and correct count should be quieter or moved to results if appropriate.
+
+Do not remove useful data from results.
+
+10. CLARIFY RUN POINTS
+
+The current displayed score is an arcade run total:
+
+- 10 base points
+- 0 to 10 speed bonus
+- 0 to 10 streak bonus
+- 10 to 30 points per correct answer
+
+Keep this system for replay motivation.
+
+Rename the active label from generic `SCORE` to:
+
+`RUN POINTS`
+
+or a similarly clear label.
+
+On results, label it:
+
+`Run Points`
+
+Do not present this number as a 0–1000 score.
+
+Preserve the current best-run-point localStorage behavior unless a small versioned key change is necessary.
+
+11. ADD MODE-SPECIFIC 0–1000 FLUENCY
+
+Create a separate Name the Note fluency calculation and persistence path.
+
+Do not put the formula directly inside `NameTheNoteGame.tsx`.
+
+Preferred file:
+
+- `src/features/fretboardDrop/nameTheNote/nameTheNoteFluency.ts`
+
+Use the existing `dropFluencyScore.ts` as the philosophy and reference model, but do not blindly reuse thresholds that assume the falling-target game's pace.
+
+Name the Note evidence should include:
+
+- correct completed targets
+- total wrong attempts
+- timeouts
+- first-try best streak
+- response timing for correct answers
+- selected strings
+- selected notes
+- include-open-strings setting
+
+Recommended evidence mapping:
+
+- `correct` = successfully completed targets
+- `wrong` = total incorrect attempts
+- `misses` = timeouts
+- `accuracy` = `correct / (correct + wrong attempts + timeouts) * 100`
+- `bestStreak` = best first-try streak
+- `responseProgress` = `responseMs / totalQuestionMs`
+
+Lower response progress means faster recall.
+
+Requirements:
+
+- output integer 0 to 1000
+- increasingly difficult near 1000
+- high fluency requires:
+  - strong volume
+  - high accuracy
+  - minimal wrong attempts
+  - minimal timeouts
+  - fast recall
+  - meaningful streak
+- a small number of easy correct answers must not produce a high score
+- one-string practice must not share the same stored fluency as all-string practice
+- different note subsets must not share the same stored fluency
+- include-open-strings setting must be part of the practice scope
+- store underlying session evidence or enough structured data to support future recalculation, not only the final number
+- keep Name the Note fluency separate from original Fretboard Drop fluency
+
+12. CALIBRATE NAME THE NOTE FLUENCY
+
+Do not blindly copy `correct / 40` from the existing falling-target formula.
+
+Use the actual 60-second Name the Note pacing.
+
+Add focused tests for representative scenarios.
+
+At minimum test these qualitative outcomes:
+
+- no correct answers: near 0
+- few correct, low accuracy: low score
+- moderate volume, good accuracy, average speed: midrange
+- strong volume, high accuracy, fast recall: high score
+- elite performance with near-perfect accuracy and very fast recall: 900+
+- 980+ should require exceptional evidence
+- wrong attempts and timeouts should impose meaningful ceilings
+- too few correct answers should cap the score
+
+Keep thresholds simple and documented.
+
+13. RESULTS SCREEN
+
+Show clearly separated metrics:
+
+- Run Points
+- Fluency, `X / 1000`
+- Fluency label
+- Fluency change from prior stored value, when meaningful
+- Correct
+- Wrong Attempts
+- Timeouts
+- Accuracy
+- Average Correct Response
+- Best Streak
+
+Do not overload the screen.
+
+Use the existing fluency labels or create a Name the Note-specific equivalent if needed:
+
+- Getting started
+- Building recall
+- Solid run
+- Strong fluency
+- Excellent
+- Elite
+- Legendary
+
+14. PERSISTENCE
+
+Add a versioned Name the Note fluency storage path.
+
+Scope it by:
+
+- selected string set
+- selected note set
+- include-open-strings setting
+
+Use a stable normalized key order.
+
+Do not overwrite original Fretboard Drop fluency data.
+
+Keep Run Points and Fluency as separate persisted concepts.
+
+15. PRESERVE CURRENT GAMEPLAY
+
+Do not change:
+
+- shuffled-deck target randomization
+- 60-second run duration
+- 4-second question duration
+- retry after wrong answer
+- no correct reveal after wrong answer
+- timeout reveal behavior
+- A–G keyboard shortcuts
+- setup filters
+- exact-cell target identity
+- OPEN zone behavior
+- Play Again
+- Back behavior
+- original Fretboard Drop
+- Guided Learning
+- Prompt 1 shared target model
+
+16. TESTING
+
+Update or add focused tests for:
+
+Visual structure:
+
+- answer order is A through G
+- answer group uses a bounded centered layout
+- no full-width answer grid across the screen
+- fret widths are progressively narrower
+- fret 1 is wider than fret 11
+- neck taper styling is present
+- string gauge increases from high E to low E
+- OPEN remains separate
+- exact target remains in the correct cell
+
+Countdown:
+
+- answer-button fill still derives from `countdownFraction`
+- letters remain rendered
+- fretboard does not receive countdown color styling
+- numeric question countdown remains
+
+Scoring:
+
+- Run Points remain separate from Fluency
+- Run Points formula is unchanged unless explicitly documented
+- fluency returns 0 to 1000
+- representative calibration cases behave as intended
+- persistence is scoped by strings, notes, and open-string setting
+- existing original Drop fluency persistence remains untouched
+
+Regression:
+
+- randomization still uses the shuffled deck
+- wrong-answer retry still works
+- timeout reveal still works
+- Play Again still works
+- best Run Points persistence still works
+- original Fretboard Drop tests pass
+- Guided entry behavior passes
+
+Avoid brittle screenshot or exact-pixel tests.
+
+Run:
+
+- focused Name the Note tests
+- focused fluency tests
+- broader relevant Fretboard Drop tests
+- full test suite
+- typecheck
+- production build
+
+Do not use:
+
+- Playwright
+- browser automation
+- screenshot testing
+- live preview
+
+The user will manually verify the visual result.
+
+17. DOCUMENTATION
+
+Update:
+
+- `doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md`
+- `doc/name-the-note/NAME_THE_NOTE_ROADMAP.md` only if the phase status needs a concise update
+
+Document:
+
+- compact wireframe-aligned proportions
+- realistic fret-spacing model
+- subtle neck taper
+- string gauge variation
+- compact answer controls
+- Run Points versus Fluency
+- fluency evidence, scope, and persistence
+- calibration assumptions
+- deferred realistic renderer polish
+
+Do not create another broad roadmap document.
+
+18. ENGINEERING PRINCIPLES
+
+Apply:
+
+- Jobs: one clear focal point, target first
+- Krug: obvious answer action and low pointer travel
+- Tufte: every visual element communicates state
+- Duarte: strong hierarchy and clear contrast
+- Pike/Thompson: smallest clear implementation, minimal abstractions
+
+Do not overcomplicate.
+
+Do not add:
+
+- backend
+- authentication
+- analytics
+- microphone
+- audio engine
+- particle system
+- global state library
+- broad renderer rewrite
+- unrelated refactors
+
+ACCEPTANCE CRITERIA
+
+Complete only when:
+
+1. The fretboard is compact and closer to the wireframe proportions.
+2. Fret 1 is visibly wider than fret 11.
+3. Fret spacing decreases progressively using a clear mathematical model.
+4. The neck is subtly narrower near the nut and wider toward higher frets.
+5. String gauges increase from high E to low E.
+6. The target remains exact and visually dominant.
+7. The answer controls are compact, centered, and ordered A through G.
+8. Pointer travel is substantially reduced.
+9. Draining fill remains clear and letters stay readable.
+10. Active top bar is simpler.
+11. Current score is clearly labeled Run Points.
+12. A separate 0–1000 Name the Note Fluency score exists.
+13. Fluency is persisted by practice configuration.
+14. Results clearly separate Run Points and Fluency.
+15. Current randomized and retry behavior remains intact.
+16. Original Fretboard Drop behavior remains intact.
+17. Tests, typecheck, and production build pass.
+18. Documentation is updated.
+
+FINAL RESPONSE
+
+Report:
+
+1. visual layout changes
+2. fret-spacing calculation
+3. neck taper implementation
+4. string gauge implementation
+5. answer-control changes
+6. Run Points clarification
+7. fluency formula and calibration
+8. persistence scope
+9. files changed
+10. tests and checks run
+11. deferred polish
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use:
+
+TASK INCOMPLETE
+
+when requested work remains unfinished, and state the exact blocker or remaining work.

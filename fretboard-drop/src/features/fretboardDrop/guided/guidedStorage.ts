@@ -28,7 +28,7 @@ export const DEFAULT_GUIDED_PROGRESS = {
 const OLD_LESSON_IDS = new Set(["a", "bc", "d", "ef"]);
 
 function isGuidedPreferredMode(value: unknown): value is GuidedPreferredMode {
-  return value === "guided" || value === "free-play";
+  return value === "guided" || value === "free-play" || value === "name-the-note";
 }
 
 function safeGetItem(key: string): string | null {

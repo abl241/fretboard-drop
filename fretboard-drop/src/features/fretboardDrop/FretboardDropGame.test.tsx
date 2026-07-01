@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTargetProgress, writeBestDropScore } from "./dropGameUtils";
+import { DROP_SPEED_MODE_STORAGE_KEY, getTargetProgress, writeBestDropScore } from "./dropGameUtils";
 import { appendCompletedRunToHistory } from "./dropRunHistory";
 import { FretboardDropGame } from "./FretboardDropGame";
 import { HorizontalDeadlineStage, getHorizontalDeadlinePickRightPercent } from "./HorizontalDeadlineStage";
@@ -39,6 +39,10 @@ function togglePracticeNote(note: string): void {
 
 function selectAOnly(): void {
   for (const note of ["C", "D", "E", "F", "G", "B"]) togglePracticeNote(note);
+}
+
+function selectPracticeTempo(): void {
+  fireEvent.click(screen.getByRole("button", { name: /Practice Tempo/ }));
 }
 
 function readCellProgressRecord(cellId: string) {
@@ -91,6 +95,7 @@ describe("FretboardDropGame", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+    window.localStorage.clear();
   });
 
   it("shows practice strings on the start screen with high E selected by default", () => {
@@ -101,6 +106,10 @@ describe("FretboardDropGame", () => {
     expect(screen.getByText("Selected: high E")).toBeInTheDocument();
     expect(screen.getByText("Practice notes:")).toBeInTheDocument();
     expect(screen.getByText("all notes")).toBeInTheDocument();
+    expect(screen.getByText("Pick Speed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Warm-Up/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Practice Tempo/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Performance Tempo/ })).toHaveAttribute("aria-pressed", "false");
     for (const note of ["C", "D", "E", "F", "G", "A", "B"]) {
       expect(getPracticeNoteButton(note)).toHaveAttribute("aria-pressed", "true");
     }
@@ -108,6 +117,16 @@ describe("FretboardDropGame", () => {
     expect(screen.getByRole("button", { name: "high E" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stats" })).toBeInTheDocument();
+  });
+
+  it("persists the selected Fretboard Drop speed mode from setup", () => {
+    window.localStorage.clear();
+    render(<FretboardDropGame />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Performance Tempo/ }));
+
+    expect(screen.getByRole("button", { name: /Performance Tempo/ })).toHaveAttribute("aria-pressed", "true");
+    expect(window.localStorage.getItem(DROP_SPEED_MODE_STORAGE_KEY)).toBe("performance-tempo");
   });
 
   it("opens Stats from the start screen and returns back", async () => {
@@ -470,7 +489,7 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Practice weakest" }));
 
     expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
-    expect(screen.getByText("Focus Practice · 1 cells")).toBeInTheDocument();
+    expect(screen.getByText(/Focus Practice · 1 cells/)).toBeInTheDocument();
   });
 
   it("shows focused Results actions after a Focus Practice run", async () => {
@@ -737,6 +756,7 @@ describe("FretboardDropGame", () => {
 
     render(<FretboardDropGame />);
     selectAOnly();
+    selectPracticeTempo();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     act(() => {
@@ -803,6 +823,7 @@ describe("FretboardDropGame", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
 
     render(<FretboardDropGame />);
+    selectPracticeTempo();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     act(() => {
@@ -835,6 +856,7 @@ describe("FretboardDropGame", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
 
     render(<FretboardDropGame />);
+    selectPracticeTempo();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     for (const expectedLives of ["2 lives", "1 lives"]) {
@@ -902,7 +924,7 @@ describe("FretboardDropGame", () => {
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     appendCompletedRunToHistory(
-      "mode:standard-60s|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
+      "mode:standard-60s|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
       {
         completedAt: 1,
         fluencyScore: 640,

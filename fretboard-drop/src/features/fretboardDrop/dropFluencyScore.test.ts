@@ -240,4 +240,19 @@ describe("Fretboard Drop Fluency Score", () => {
     expect(readBestFluencyScore([0], { practiceType: "note-focus", selectedNotes: ["A"] })).toBe(720);
     expect(readBestFluencyScore([1], { practiceType: "string-focus", selectedNotes: null })).toBe(0);
   });
+
+  it("stores Fluency bests separately by speed mode with Practice Tempo legacy fallback", () => {
+    window.localStorage.clear();
+    writeBestFluencyScore(640, [0], { practiceType: "string-focus", selectedNotes: null });
+
+    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, "practice-tempo")).toBe(640);
+    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, "warm-up")).toBe(0);
+
+    writeBestFluencyScore(710, [0], { practiceType: "string-focus", selectedNotes: null }, "warm-up");
+    writeBestFluencyScore(820, [0], { practiceType: "string-focus", selectedNotes: null }, "performance-tempo");
+
+    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, "warm-up")).toBe(710);
+    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, "performance-tempo")).toBe(820);
+    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, "practice-tempo")).toBe(640);
+  });
 });

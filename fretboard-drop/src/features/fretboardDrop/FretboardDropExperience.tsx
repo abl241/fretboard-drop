@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FretboardDropGame } from "./FretboardDropGame";
+import { NameTheNoteGame } from "./nameTheNote/NameTheNoteGame";
 import {
   GuidedLearningPath,
   GuidedModeChoice,
@@ -20,13 +21,16 @@ export function FretboardDropExperience() {
   const [preferredMode, setPreferredMode] = useState<GuidedPreferredMode | null>(() => getInitialExperienceMode(readGuidedPreferredMode()));
   const [hasOpenedGuided, setHasOpenedGuided] = useState(() => preferredMode === "guided");
   const [hasOpenedFreePlay, setHasOpenedFreePlay] = useState(() => preferredMode === "free-play");
+  const [hasOpenedNameTheNote, setHasOpenedNameTheNote] = useState(() => preferredMode === "name-the-note");
 
   function chooseMode(mode: GuidedPreferredMode) {
     writeGuidedPreferredMode(mode);
     if (mode === "guided") {
       setHasOpenedGuided(true);
-    } else {
+    } else if (mode === "free-play") {
       setHasOpenedFreePlay(true);
+    } else {
+      setHasOpenedNameTheNote(true);
     }
     setPreferredMode(mode);
   }
@@ -36,6 +40,7 @@ export function FretboardDropExperience() {
       <GuidedModeChoice
         onChooseGuided={() => chooseMode("guided")}
         onChooseFreePlay={() => chooseMode("free-play")}
+        onChooseNameTheNote={() => chooseMode("name-the-note")}
       />
     );
   }
@@ -53,7 +58,18 @@ export function FretboardDropExperience() {
       ) : null}
       {hasOpenedFreePlay ? (
         <div hidden={preferredMode !== "free-play"}>
-          <FretboardDropGame onSwitchToGuided={() => chooseMode("guided")} />
+          <FretboardDropGame
+            onSwitchToGuided={() => chooseMode("guided")}
+            onSwitchToNameTheNote={() => chooseMode("name-the-note")}
+          />
+        </div>
+      ) : null}
+      {hasOpenedNameTheNote ? (
+        <div hidden={preferredMode !== "name-the-note"}>
+          <NameTheNoteGame
+            onBackToFreePlay={() => chooseMode("free-play")}
+            onSwitchToGuided={() => chooseMode("guided")}
+          />
         </div>
       ) : null}
     </>

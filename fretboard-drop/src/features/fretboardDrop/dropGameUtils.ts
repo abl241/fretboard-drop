@@ -5,6 +5,7 @@ import type {
   DropGameState,
   DropPracticeContext,
   DropRunMode,
+  DropSpeedMode,
   DropStringIndex,
   DropStringSelection,
   DropStringVisualState,
@@ -23,7 +24,7 @@ export const DROP_COMPACT_LANDSCAPE_TARGET_HEIGHT_PX = 66;
 export const DROP_TARGET_START_TOP_PERCENT = 5;
 export const DROP_HIT_LINE_TOP_PERCENT = 85;
 export const DROP_TARGET_MIN_DURATION_MS = 2_100;
-export const DROP_TARGET_MAX_DURATION_MS = 6_400;
+export const DROP_TARGET_MAX_DURATION_MS = 7_800;
 export const DROP_TARGET_GENERATION_VERSION = "v1";
 export const DROP_TARGET_STREAM_SPAWN_INTERVAL_MS = 2_400;
 export const DROP_TARGET_STREAM_MAX_ON_SCREEN = 5;
@@ -46,6 +47,62 @@ export const DROP_PACING_TIERS = [
   { minCombo: 10, speedUpMs: 1_250, message: "Faster now!" },
   { minCombo: 5, speedUpMs: 650, message: "Let's speed up!" },
 ] as const;
+export const DROP_SPEED_MODE_STORAGE_KEY = "fretboard-drop:speed-mode:v1";
+export const DEFAULT_FIRST_TIME_DROP_SPEED_MODE = "warm-up" as const satisfies DropSpeedMode;
+export const DEFAULT_RETURNING_DROP_SPEED_MODE = "practice-tempo" as const satisfies DropSpeedMode;
+export const DROP_SPEED_MODE_CONFIGS = [
+  {
+    id: "warm-up",
+    label: "Warm-Up",
+    description: "More time to read the string and fret.",
+    targetDurationMs: 7_000,
+    minDurationMs: 5_600,
+    maxDurationMs: 7_800,
+    earlyForgivenessMs: 350,
+    missRecoveryMs: 650,
+    scoreRampMaxMs: 720,
+    pacingScale: 0.55,
+    hitTimingScale: 1,
+  },
+  {
+    id: "practice-tempo",
+    label: "Practice Tempo",
+    description: "Steady recall pressure for regular practice.",
+    targetDurationMs: 4_000,
+    minDurationMs: 2_100,
+    maxDurationMs: 5_200,
+    earlyForgivenessMs: 260,
+    missRecoveryMs: 520,
+    scoreRampMaxMs: 560,
+    pacingScale: 0.45,
+    hitTimingScale: 1,
+  },
+  {
+    id: "performance-tempo",
+    label: "Performance Tempo",
+    description: "Fast picks for confident recall.",
+    targetDurationMs: 2_500,
+    minDurationMs: 2_100,
+    maxDurationMs: 3_300,
+    earlyForgivenessMs: 120,
+    missRecoveryMs: 340,
+    scoreRampMaxMs: 240,
+    pacingScale: 0.16,
+    hitTimingScale: 0.42,
+  },
+] as const satisfies readonly {
+  id: DropSpeedMode;
+  label: string;
+  description: string;
+  targetDurationMs: number;
+  minDurationMs: number;
+  maxDurationMs: number;
+  earlyForgivenessMs: number;
+  missRecoveryMs: number;
+  scoreRampMaxMs: number;
+  pacingScale: number;
+  hitTimingScale: number;
+}[];
 export const NATURAL_DROP_NOTES = ["C", "D", "E", "F", "G", "A", "B"] as const satisfies readonly Note[];
 export const DEFAULT_DROP_PRACTICE_CONTEXT = {
   practiceType: "string-focus",
@@ -150,6 +207,53 @@ export function getPromptTimeRemaining(progress: number): number {
   return clamp(1 - progress, 0, 1);
 }
 
+export function normalizeDropSpeedMode(speedMode: string | null | undefined): DropSpeedMode | null {
+  return DROP_SPEED_MODE_CONFIGS.find((config) => config.id === speedMode)?.id ?? null;
+}
+
+export function getDropSpeedModeConfig(speedMode: DropSpeedMode = DEFAULT_RETURNING_DROP_SPEED_MODE) {
+  return DROP_SPEED_MODE_CONFIGS.find((config) => config.id === speedMode) ?? DROP_SPEED_MODE_CONFIGS[0];
+}
+
+function hasLegacyDropProgress(): boolean {
+  try {
+    if (window.localStorage.getItem(DROP_BEST_SCORE_KEY)) return true;
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (
+        key?.startsWith(`${DROP_BEST_SCORE_KEY}:`)
+        || key?.startsWith("fretboard-drop:best-fluency-score:")
+        || key?.startsWith("fretboard-drop:run-history:")
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+export function readDropSpeedMode(): DropSpeedMode {
+  try {
+    const storedMode = normalizeDropSpeedMode(window.localStorage.getItem(DROP_SPEED_MODE_STORAGE_KEY));
+    if (storedMode) return storedMode;
+  } catch {
+    return DEFAULT_FIRST_TIME_DROP_SPEED_MODE;
+  }
+
+  return hasLegacyDropProgress() ? DEFAULT_RETURNING_DROP_SPEED_MODE : DEFAULT_FIRST_TIME_DROP_SPEED_MODE;
+}
+
+export function writeDropSpeedMode(speedMode: DropSpeedMode): void {
+  try {
+    window.localStorage.setItem(DROP_SPEED_MODE_STORAGE_KEY, speedMode);
+  } catch {
+    // Speed mode is local-only preference state.
+  }
+}
+
 function getPromptSlotDistance(left: DropPromptStagePosition, right: DropPromptStagePosition): number {
   return Math.hypot(left.stageXPercent - right.stageXPercent, left.stageYPercent - right.stageYPercent);
 }
@@ -215,6 +319,7 @@ export type DropDurationOptions = {
   afterMiss?: boolean;
   recentHitProgresses?: readonly number[];
   occupiedStagePositions?: readonly DropPromptStagePosition[];
+  speedMode?: DropSpeedMode;
 };
 
 function getSeededDurationVariation(seed: number): number {
@@ -240,18 +345,19 @@ function getHitTimingAdjustmentMs(recentHitProgresses: readonly number[] = []): 
 }
 
 export function getDropDurationMs(score: number, options: DropDurationOptions = {}): number {
+  const speedConfig = getDropSpeedModeConfig(options.speedMode);
   const elapsedMs = options.elapsedMs ?? DROP_RUN_DURATION_MS;
-  const earlyForgiveness = elapsedMs < 7_000 ? Math.round((1 - elapsedMs / 7_000) * 650) : 0;
-  const scoreRamp = Math.min(650, Math.max(0, score) * 18);
-  const tierRamp = getPacingTierSpeedUpMs(options.combo ?? 0);
-  const missRecovery = options.afterMiss ? 520 : 0;
-  const hitTimingAdjustment = getHitTimingAdjustmentMs(options.recentHitProgresses);
+  const earlyForgiveness = elapsedMs < 7_000 ? Math.round((1 - elapsedMs / 7_000) * speedConfig.earlyForgivenessMs) : 0;
+  const scoreRamp = Math.min(speedConfig.scoreRampMaxMs, Math.max(0, score) * 18);
+  const tierRamp = Math.round(getPacingTierSpeedUpMs(options.combo ?? 0) * speedConfig.pacingScale);
+  const missRecovery = options.afterMiss ? speedConfig.missRecoveryMs : 0;
+  const hitTimingAdjustment = Math.round(getHitTimingAdjustmentMs(options.recentHitProgresses) * speedConfig.hitTimingScale);
   const variation = getSeededDurationVariation(options.seed ?? 0);
 
   return clamp(
-    5_450 + earlyForgiveness + missRecovery + hitTimingAdjustment + variation - scoreRamp - tierRamp,
-    DROP_TARGET_MIN_DURATION_MS,
-    DROP_TARGET_MAX_DURATION_MS,
+    speedConfig.targetDurationMs + earlyForgiveness + missRecovery + hitTimingAdjustment + variation - scoreRamp - tierRamp,
+    speedConfig.minDurationMs,
+    speedConfig.maxDurationMs,
   );
 }
 
@@ -377,11 +483,21 @@ export function getPracticeLabel(
   return `${selectionLabel} · ${formatPracticeNoteLabel(normalized)}`;
 }
 
-function getBestScoreStorageKey(selection: DropStringSelection, practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT): string {
+function appendSpeedModeKey(baseKey: string, speedMode?: DropSpeedMode): string {
+  return speedMode ? `${baseKey}:speed:${speedMode}` : baseKey;
+}
+
+function getBestScoreStorageKey(
+  selection: DropStringSelection,
+  practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT,
+  speedMode?: DropSpeedMode,
+): string {
   const stringKey = getStringSelectionKey(selection);
   const practiceKey = createPracticeNoteKey(practiceContext);
-  if (practiceKey === "all-naturals") return `${DROP_BEST_SCORE_KEY}:strings:${stringKey}`;
-  return `${DROP_BEST_SCORE_KEY}:strings:${stringKey}:practice:${practiceKey}`;
+  const baseKey = practiceKey === "all-naturals"
+    ? `${DROP_BEST_SCORE_KEY}:strings:${stringKey}`
+    : `${DROP_BEST_SCORE_KEY}:strings:${stringKey}:practice:${practiceKey}`;
+  return appendSpeedModeKey(baseKey, speedMode);
 }
 
 function parseStoredBestScore(raw: string | null): number {
@@ -392,12 +508,19 @@ function parseStoredBestScore(raw: string | null): number {
 export function readBestDropScore(
   selection: DropStringSelection = DEFAULT_DROP_STRING_SELECTION,
   practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT,
+  speedMode?: DropSpeedMode,
 ): number {
   try {
     const selected = normalizeStringSelection(selection);
     const normalizedPractice = normalizePracticeContext(practiceContext);
-    const selectedBest = parseStoredBestScore(window.localStorage.getItem(getBestScoreStorageKey(selected, normalizedPractice)));
+    const selectedBest = parseStoredBestScore(window.localStorage.getItem(getBestScoreStorageKey(selected, normalizedPractice, speedMode)));
     if (selectedBest > 0) return selectedBest;
+    if (speedMode === DEFAULT_RETURNING_DROP_SPEED_MODE) {
+      const legacyScopedBest = parseStoredBestScore(window.localStorage.getItem(getBestScoreStorageKey(selected, normalizedPractice)));
+      if (legacyScopedBest > 0) return legacyScopedBest;
+    } else if (speedMode) {
+      return 0;
+    }
 
     // Older versions stored one global best. Treat it as High E only so existing local progress does not vanish.
     if (
@@ -417,9 +540,10 @@ export function writeBestDropScore(
   score: number,
   selection: DropStringSelection = DEFAULT_DROP_STRING_SELECTION,
   practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT,
+  speedMode?: DropSpeedMode,
 ): void {
   try {
-    window.localStorage.setItem(getBestScoreStorageKey(selection, practiceContext), String(score));
+    window.localStorage.setItem(getBestScoreStorageKey(selection, practiceContext, speedMode), String(score));
   } catch {
     // Personal best is nice-to-have local state only.
   }
@@ -571,6 +695,7 @@ export type BuildFallingTargetsInput = {
   practiceContext: DropPracticeContext;
   runMode: DropRunMode;
   focusPool: readonly DropFocusPoolCell[];
+  speedMode?: DropSpeedMode;
   durationOptions?: DropDurationOptions;
   verticalStaggerMs?: number;
 };
@@ -584,6 +709,7 @@ export function buildFallingTargets({
   practiceContext,
   runMode,
   focusPool,
+  speedMode = DEFAULT_RETURNING_DROP_SPEED_MODE,
   durationOptions = {},
   verticalStaggerMs = DROP_TARGET_STREAM_SPAWN_INTERVAL_MS,
 }: BuildFallingTargetsInput): { targets: DropTarget[]; nextSeed: number } {
@@ -597,6 +723,7 @@ export function buildFallingTargets({
     const startedAt = now - index * verticalStaggerMs;
     const sharedOptions = {
       ...durationOptions,
+      speedMode,
       occupiedStagePositions,
     };
     const target = runMode === "focus"
@@ -637,6 +764,7 @@ export type SpawnStreamTargetInput = {
   practiceContext: DropPracticeContext;
   runMode: DropRunMode;
   focusPool: readonly DropFocusPoolCell[];
+  speedMode?: DropSpeedMode;
   inputLocked?: boolean;
 };
 
@@ -676,6 +804,7 @@ export function spawnStreamTarget(input: SpawnStreamTargetInput): {
     combo: input.combo,
     elapsedMs: input.elapsedMs,
     recentHitProgresses: input.recentHitProgresses,
+    speedMode: input.speedMode ?? DEFAULT_RETURNING_DROP_SPEED_MODE,
     occupiedStagePositions,
   };
   const previousCellId = input.fallingTargets.length > 0
@@ -732,6 +861,7 @@ export function createInitialDropState(now: number = 0): DropGameState {
     stringSelection: DEFAULT_DROP_STRING_SELECTION,
     practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
     runMode: "normal",
+    speedMode: DEFAULT_FIRST_TIME_DROP_SPEED_MODE,
     focusPool: [],
     bestScoreAtStart: 0,
   };

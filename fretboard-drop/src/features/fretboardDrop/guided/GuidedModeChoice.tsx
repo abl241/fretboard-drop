@@ -1,9 +1,11 @@
 export function GuidedModeChoice({
   onChooseGuided,
   onChooseFreePlay,
+  onChooseNameTheNote,
 }: {
   onChooseGuided: () => void;
   onChooseFreePlay: () => void;
+  onChooseNameTheNote: () => void;
 }) {
   return (
     <div className="guided-shell min-h-[calc(100vh-1px)] bg-[#080a0f] px-4 py-6 text-slate-50">
@@ -13,7 +15,7 @@ export function GuidedModeChoice({
             <p className="text-xs font-black uppercase tracking-[0.36em] text-cyan-200/70">Fretboard Drop</p>
             <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">Choose your path</h1>
           </div>
-          <div className="grid gap-3 md:grid-cols-[1.08fr_0.92fr]">
+          <div className="grid gap-3 md:grid-cols-[1.08fr_0.92fr_0.92fr]">
             <article className="rounded-xl border border-amber-100/36 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.18),transparent_42%),rgba(30,41,59,0.58)] p-5 text-left shadow-[0_0_36px_rgba(251,191,36,0.1)]">
               <p className="inline-flex rounded-full border border-amber-100/34 bg-amber-200/12 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-amber-100">
                 Best place to start
@@ -41,6 +43,19 @@ export function GuidedModeChoice({
                 className="mt-7 inline-flex min-h-11 items-center justify-center rounded-lg border border-cyan-100/28 px-5 text-sm font-black text-cyan-100 transition hover:border-cyan-100/70 hover:bg-cyan-200/10"
               >
                 Set Up a Run
+              </button>
+            </article>
+            <article className="rounded-xl border border-cyan-100/16 bg-slate-950/54 p-5 text-left">
+              <h2 className="text-3xl font-black tracking-tight text-white">Name the Note</h2>
+              <p className="mt-3 max-w-sm text-base font-semibold leading-relaxed text-slate-300">
+                See one exact fretboard position and answer with the note name.
+              </p>
+              <button
+                type="button"
+                onClick={onChooseNameTheNote}
+                className="mt-7 inline-flex min-h-11 items-center justify-center rounded-lg border border-cyan-100/28 px-5 text-sm font-black text-cyan-100 transition hover:border-cyan-100/70 hover:bg-cyan-200/10"
+              >
+                Play Name the Note
               </button>
             </article>
           </div>

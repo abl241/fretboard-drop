@@ -6,6 +6,10 @@ Build a new sibling mode for Fretboard Drop in which the app highlights one exac
 
 The mode should feel as polished, fast, and replayable as the current game while reusing as much proven logic as possible. The implementation should also preserve a clean path for a later fretboard visual upgrade without coupling gameplay logic to the current renderer.
 
+## Current MVP Status
+
+The playable MVP now includes shuffled-deck target selection, retryable wrong answers, compact answer-button countdown controls, a wireframe-aligned fretboard pass with proportional fret spacing, subtle neck taper, string gauge variation, Run Points, and a separate scoped 0-1000 Name the Note Fluency score. The full realistic fretboard renderer, weak-area practice, detailed attempt history, and advanced recommendations remain later work.
+
 ## Core product promise
 
 **See one exact string-and-fret position, name the note quickly, and build a 0 to 1000 fluency score.**

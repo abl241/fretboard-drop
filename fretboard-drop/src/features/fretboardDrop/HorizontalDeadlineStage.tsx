@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DropPracticeContext, DropStageCue, DropStringSelection, DropTarget } from "./dropGameTypes";
-import { getPracticeLabel, getStringAccent, getTargetProgress } from "./dropGameUtils";
+import { getPracticeLabel, getPromptTimeRemaining, getStringAccent, getTargetProgress } from "./dropGameUtils";
 
 const PICK_START_RIGHT_PERCENT = 12;
 const DEADLINE_RIGHT_PERCENT = 86;
@@ -35,6 +35,7 @@ export function HorizontalDeadlineStage({
 }) {
   const activeTarget = fallingTargets.find((target) => target.id === activeTargetId) ?? null;
   const activeProgress = getTargetProgress(activeTarget, animationTime);
+  const isFinalSecond = Boolean(activeTarget && activeTarget.durationMs * getPromptTimeRemaining(activeProgress) <= 1_000);
   const lastActiveRef = useRef<ResolvedPickSnapshot | null>(null);
   const resolvedPick = cue && (cue.kind === "correct" || cue.kind === "tier-up" || cue.kind === "miss")
     ? lastActiveRef.current
@@ -82,6 +83,7 @@ export function HorizontalDeadlineStage({
           progress={activeProgress}
           targetSizePx={targetSizePx}
           state="active"
+          isFinalSecond={isFinalSecond}
         />
       ) : null}
       {resolvedPick && isResolvedHitCue ? (
@@ -91,6 +93,7 @@ export function HorizontalDeadlineStage({
           progress={resolvedPick.progress}
           targetSizePx={targetSizePx}
           state="resolved-correct"
+          isFinalSecond={false}
         />
       ) : null}
       {resolvedPick && isMissCue ? (
@@ -112,11 +115,13 @@ function HorizontalDeadlinePick({
   progress,
   targetSizePx,
   state,
+  isFinalSecond,
 }: {
   target: DropTarget;
   progress: number;
   targetSizePx: number;
   state: "active" | "resolved-correct";
+  isFinalSecond: boolean;
 }) {
   const accent = getStringAccent(target.stringIndex);
   const rightEdgePercent = getHorizontalDeadlinePickRightPercent(progress);
@@ -124,7 +129,7 @@ function HorizontalDeadlinePick({
 
   return (
     <div
-      className={`horizontal-deadline-pick horizontal-deadline-pick--${state} pointer-events-none absolute top-1/2 z-20 flex items-center justify-center`}
+      className={`horizontal-deadline-pick horizontal-deadline-pick--${state} ${isFinalSecond ? "horizontal-deadline-pick--final-second" : ""} pointer-events-none absolute top-1/2 z-20 flex items-center justify-center`}
       style={{
         left: `${rightEdgePercent}%`,
         width: sizePx,
@@ -137,6 +142,7 @@ function HorizontalDeadlinePick({
       data-progress={progress.toFixed(3)}
       data-position-percent={rightEdgePercent.toFixed(2)}
       data-state={state}
+      data-final-second={isFinalSecond ? "true" : "false"}
     >
       <span className="horizontal-deadline-pick-body absolute inset-0" aria-hidden="true" />
       <span className="horizontal-deadline-pick-note relative z-10 font-black leading-none text-slate-950">

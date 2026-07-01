@@ -22,6 +22,7 @@ describe("FretboardDropExperience", () => {
     expect(getInitialExperienceMode(null)).toBeNull();
     expect(getInitialExperienceMode("guided")).toBe("guided");
     expect(getInitialExperienceMode("free-play")).toBe("free-play");
+    expect(getInitialExperienceMode("name-the-note")).toBe("name-the-note");
   });
 
   it("shows the first-visit mode choice", () => {
@@ -30,6 +31,7 @@ describe("FretboardDropExperience", () => {
     expect(screen.getByRole("heading", { name: "Learn the Fretboard" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Learning" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set Up a Run" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play Name the Note" })).toBeInTheDocument();
   });
 
   it("choosing Guided Learning saves the preference and opens orientation", () => {
@@ -48,6 +50,26 @@ describe("FretboardDropExperience", () => {
 
     expect(window.localStorage.getItem(GUIDED_PREFERRED_MODE_STORAGE_KEY)).toBe("free-play");
     expect(screen.getByRole("button", { name: "Start Run" })).toBeInTheDocument();
+  });
+
+  it("choosing Name the Note saves the preference and opens the playable mode", () => {
+    render(<FretboardDropExperience />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Play Name the Note" }));
+
+    expect(window.localStorage.getItem(GUIDED_PREFERRED_MODE_STORAGE_KEY)).toBe("name-the-note");
+    expect(screen.getByRole("heading", { name: "Name the Note" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Run" })).toBeInTheDocument();
+  });
+
+  it("keeps the current Fretboard Drop setup reachable after adding Name the Note", () => {
+    render(<FretboardDropExperience />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Up a Run" }));
+
+    expect(screen.getByRole("heading", { name: "Fretboard Drop" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Run" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try Name the Note" })).toBeInTheDocument();
   });
 
   it("shows orientation only until completed", () => {

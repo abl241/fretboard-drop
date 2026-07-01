@@ -1,0 +1,224 @@
+FRETBOARD DROP NAME THE NOTE — PROMPT 2A
+REMOVE QUESTION PROGRESS BAR AND USE THE FRETBOARD AS THE COUNTDOWN
+
+Context
+Prompt 2 is complete and the playable Name the Note mode works, but the current implementation added a horizontal per-question progress bar beneath the fretboard.
+
+That is contrary to the approved product direction.
+
+Read and follow:
+
+doc/name-the-note/NAME_THE_NOTE_ROADMAP.md
+doc/name-the-note/PROMPT_1_ARCHITECTURE_AUDIT.md
+doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md
+
+Use the wireframes in:
+
+doc/name-the-note/
+
+as visual references.
+
+Objective
+Make a small, focused correction to the playable Name the Note mode before it is committed:
+
+1. remove the horizontal per-question progress bar
+2. make the fretboard itself communicate question-time remaining
+3. keep the exact target position clear
+4. preserve all Prompt 2 gameplay behavior
+
+Do not perform the full realistic fretboard redesign yet.
+
+Required changes
+
+1. Remove the question progress bar
+
+Remove the horizontal bar currently rendered along the bottom of the fretboard.
+
+Do not replace it with another conventional progress bar, circular timer, segmented ring, or detached gauge.
+
+The numeric per-question time label may remain as a secondary cue if it is already present and visually restrained.
+
+2. Use countdownFraction as the only timing input
+
+Continue using:
+
+```ts
+countdownFraction = remainingQuestionMs / totalQuestionMs;
+```
+
+All countdown styling must derive from this normalized value.
+
+Do not base colors or animation states on fixed seconds remaining.
+
+The same visual behavior must work for future question windows ranging from approximately 2 to 6 seconds.
+
+3. Make the whole fretboard provide the peripheral countdown cue
+
+The player may be looking at the note buttons, so the countdown must be noticeable through peripheral vision.
+
+Use broad, restrained changes across the fretboard surface:
+
+- ambient brightness
+- broad glow
+- color temperature
+- subtle contrast or vignette shift
+
+Suggested visual progression:
+
+- 100% to 75% remaining: cool cyan or blue ambient tone
+- below 75% to 50%: green
+- below 50% to 25%: yellow or gold
+- below 25% to 10%: orange
+- 10% or less: restrained red
+
+The transition should feel continuous where practical.
+
+Do not depend on the target being centered. The cue must work identically when the target is:
+
+- OPEN
+- fret 1
+- a middle fret
+- fret 11 or the last visible fret
+
+Do not brighten the whole active string as the target cue.
+
+4. Keep the target stable and exact
+
+The target should identify one exact string-and-fret cell.
+
+Replace the current large generic question-mark marker if needed with a clearer exact-position treatment, such as:
+
+- a compact center dot
+- a thin localized cell outline
+- a small localized glow
+
+The marker must:
+
+- fit within one string-and-fret cell
+- not cover neighboring frets
+- not highlight the whole fret column
+- not highlight the whole string
+- remain visually stable while the surrounding fretboard countdown changes
+
+For OPEN targets:
+
+- keep the marker in the separate OPEN zone
+- align it to one exact string row
+- keep OPEN visually distinct from fret 1
+
+5. Preserve gameplay
+
+Do not change:
+
+- 60-second run duration
+- 4-second initial question duration
+- scoring
+- speed bonus
+- streak rules
+- answer buttons
+- correct, incorrect, and timeout behavior
+- results
+- Play Again
+- best-score persistence
+- current Fretboard Drop behavior
+- Prompt 1 shared target logic
+
+6. Preserve future renderer flexibility
+
+Keep countdown styling inside the Name the Note rendering layer.
+
+Do not move timing, scoring, or target-selection logic into CSS or the renderer.
+
+The renderer should continue to receive semantic state including:
+
+- target
+- countdownFraction
+- outcome
+- revealed note
+- interaction enabled
+
+Do not couple countdown logic to pixel coordinates.
+
+7. Reduced motion
+
+If the app already supports reduced-motion handling, preserve it.
+
+The countdown must still be understandable without animation through broad color and brightness changes.
+
+Do not add flashing or rapid screen shaking.
+
+Testing
+
+Update or add focused tests that verify:
+
+- the old question progress bar is no longer rendered
+- countdown styling or semantic state changes with countdownFraction
+- exact target identity remains unchanged
+- OPEN target remains in the OPEN zone
+- correct, incorrect, timeout, session completion, and Play Again still work
+- existing Fretboard Drop regression tests still pass
+
+Run:
+
+- focused Name the Note tests
+- broader relevant Fretboard Drop tests
+- full test suite
+- typecheck
+- production build
+
+Do not use:
+
+- Playwright
+- browser automation
+- screenshot testing
+- live preview
+
+Documentation
+
+Update:
+
+doc/name-the-note/PROMPT_2_PLAYABLE_CORE.md
+
+Add a brief correction note stating:
+
+- the conventional question progress bar was removed
+- the fretboard now communicates question time through percentage-based ambient styling
+- the target remains a stable exact-position cue
+
+Do not create a new broad roadmap document.
+
+Acceptance criteria
+
+This correction is complete only when:
+
+1. No conventional per-question progress bar remains.
+2. The fretboard visibly communicates remaining question time.
+3. The visual state is derived from countdownFraction.
+4. The cue works at OPEN, edge frets, and middle frets.
+5. One exact target position remains unambiguous.
+6. Existing Prompt 2 gameplay behavior is unchanged.
+7. Current Fretboard Drop behavior is unchanged.
+8. Tests, typecheck, and build pass.
+9. The Prompt 2 documentation is updated.
+
+Final response
+
+Report:
+
+1. files changed
+2. how the progress bar was removed
+3. how countdownFraction now changes the fretboard
+4. how exact target clarity is preserved
+5. how OPEN targets behave
+6. checks run
+7. any limitation or deferred visual polish
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use:
+
+TASK INCOMPLETE
+
+when requested work remains unfinished, and state the exact blocker or remaining work.
