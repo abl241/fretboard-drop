@@ -24,6 +24,8 @@ const laterPractice = new Date("2026-06-14T16:00:00.000Z");
 function makeTarget(overrides: Partial<DropTarget> = {}): DropTarget {
   return {
     id: 1,
+    targetKey: "standard:0:5",
+    stringId: "standard:0",
     note: "A",
     stringIndex: 0,
     fret: 5,

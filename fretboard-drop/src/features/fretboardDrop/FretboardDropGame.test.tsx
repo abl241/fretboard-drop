@@ -158,6 +158,8 @@ describe("FretboardDropGame", () => {
   it("maps the active pick position from existing target progress", () => {
     const target = {
       id: 7,
+      targetKey: "standard:0:5" as const,
+      stringId: "standard:0" as const,
       note: "A" as const,
       stringIndex: 0 as const,
       fret: 5,

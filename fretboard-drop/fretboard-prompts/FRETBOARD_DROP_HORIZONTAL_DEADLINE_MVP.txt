@@ -1,0 +1,276 @@
+FRETBOARD DROP MVP: HORIZONTAL PICK WITH DEADLINE LINE
+
+Repository context
+- App root: fretboard-drop/
+- Main game file: fretboard-drop/src/features/fretboardDrop/FretboardDropGame.tsx
+- Existing timing, target generation, scoring, lives, miss handling, adaptive durations, analytics, audio, results, focus practice, and fretboard interactions already work.
+- This task is a small visual MVP only.
+
+Design principles
+Apply these principles throughout:
+
+Steve Jobs
+- The interaction should feel immediately understandable and satisfying.
+- Focus on one memorable idea rather than adding multiple effects.
+- Preserve visual polish, but remove anything that does not improve the core experience.
+
+Edward Tufte
+- Let horizontal position communicate remaining time directly.
+- Do not duplicate the same information with a progress bar.
+- Maximize signal and minimize decorative visual noise.
+- Keep the note prompt and deadline visually clear.
+
+Steve Krug
+- A player should understand within one second:
+  1. which note to find
+  2. where the deadline is
+  3. that the pick must be answered before it reaches the line
+- Do not require explanation during play.
+- The next action must remain obvious: click the correct fret.
+
+Nancy Duarte
+- Create a simple visual story:
+  approach → decision → success or impact
+- The deadline line is the point of tension.
+- Correct and missed outcomes should be visually distinct and brief.
+
+Rob Pike / Ken Thompson
+- Use the smallest clear implementation.
+- Reuse existing timing and state.
+- Do not introduce a new animation framework, state machine, dependency, asset pipeline, or architectural layer.
+- Keep the experiment isolated and easy to remove.
+- Do not overcomplicate.
+
+Goal
+Replace the current vertical or floating prompt presentation with a simple horizontal note-pick presentation.
+
+One active pick containing the note name should move from left to right toward a thin vertical deadline line.
+
+The pick’s position should show how much response time remains.
+
+This is an MVP. Do not add an amplifier, background scenery, staff lines, guitar-string lanes, particles during normal motion, perspective effects, or decorative environmental animation.
+
+Isolation requirements
+1. Create a small self-contained presentation component, preferably:
+   fretboard-drop/src/features/fretboardDrop/HorizontalDeadlineStage.tsx
+
+2. Keep the existing DropStage implementation intact.
+
+3. Add one clearly named local feature flag near the existing game constants, for example:
+   const USE_HORIZONTAL_DEADLINE_STAGE = true;
+
+4. At the existing stage render point:
+   - render HorizontalDeadlineStage when the flag is true
+   - render the existing DropStage when the flag is false
+
+5. Do not delete or rewrite:
+   - DropStage
+   - NotePrompt
+   - reducer logic
+   - timing utilities
+   - target generation
+   - adaptive duration logic
+   - scoring
+   - lives
+   - analytics
+   - audio
+   - results
+   - guided learning
+
+6. Reverting the experiment should require only:
+   - setting the feature flag to false, or
+   - deleting the new component and its import
+
+Core behavior
+1. Preserve the exact current target timing.
+
+2. Use the existing:
+   getTargetProgress(target, animationTime)
+
+3. Map progress directly to horizontal position:
+   - progress 0 starts near the left side
+   - progress 1 reaches the deadline line
+   - do not alter durationMs
+   - do not alter adaptive pacing
+   - do not alter score or combo behavior
+   - do not alter miss timing
+   - do not alter spawn timing
+   - do not alter the 60-second run duration
+
+4. Show only one clearly active pick.
+   - Do not show multiple equally prominent moving picks.
+   - If existing stream behavior requires upcoming targets to remain rendered, hide them or make them visually negligible in this experimental stage.
+   - Do not change the underlying target stream or game logic.
+
+5. The note name must remain large and legible inside the pick throughout travel.
+
+6. Remove the visible per-target progress bar from this experimental stage.
+   Horizontal position is the timer.
+
+Deadline line
+1. Place one thin vertical line near the right edge of the stage.
+
+2. The line should be:
+   - subtle and dim normally
+   - slightly brighter during the final 20 percent of travel
+   - briefly reactive on a miss
+
+3. Do not label the line unless testing shows that the meaning is unclear.
+
+4. The line should not resemble:
+   - a fret
+   - a guitar string
+   - a staff barline
+   - a lane divider
+
+5. Keep enough space around the line so the impact animation is readable.
+
+Correct-answer animation
+When the user clicks the correct fret:
+
+1. Remove the active pick quickly and cleanly.
+2. Use a short fade-out of approximately 120 to 180 ms.
+3. Allow a very small scale-down, but no explosion.
+4. Do not use large particles, screen shake, confetti, or full-stage flashes.
+5. The next target should continue through the existing game flow.
+6. Preserve current fretboard feedback and sound behavior.
+
+Miss animation
+When the pick reaches the deadline:
+
+1. Trigger one brief, restrained impact effect.
+2. The pick may break into approximately 4 to 6 small fragments.
+3. Fragments should travel only a short distance and disappear quickly.
+4. The deadline line should flash once in a muted red-orange.
+5. Total impact animation should finish in approximately 200 to 300 ms.
+6. Do not create fireworks, a large explosion, a particle cloud, or strong screen shake.
+7. Preserve the existing correct-fret reveal, life loss, and miss flow.
+
+Visual hierarchy
+The player should perceive, in this order:
+
+1. Note name
+2. Distance to deadline
+3. Fretboard
+4. Correct or missed result
+
+Nothing else should compete with these four signals.
+
+Stage design
+1. Keep the stage background quiet and mostly empty.
+2. Remove or suppress stage-wide decorative effects inside the experimental renderer.
+3. Do not add:
+   - radial background effects
+   - moving background effects
+   - staff notation
+   - string lanes
+   - perspective highways
+   - scenery
+   - decorative objects
+   - persistent particles
+   - large glow fields
+
+4. Preserve the focus label and streak indicator only if they remain visually subordinate.
+5. Do not add new instructional text during play.
+6. Keep the fretboard visually dominant and close enough to the note prompt to minimize eye travel.
+7. Do not increase the current stage height.
+8. Reduce stage height if the current empty vertical area is no longer needed, but do not break compact phone landscape or desktop layouts.
+
+Responsive behavior
+1. Preserve desktop usability.
+2. Preserve compact phone landscape usability.
+3. Keep the pick and deadline visible at all supported widths.
+4. Ensure the pick never overlaps the deadline at progress values below 1.
+5. Keep the note legible on small screens.
+6. Do not redesign the fretboard.
+
+Reduced motion
+Respect prefers-reduced-motion:
+
+- keep the pick’s functional position updates
+- disable fragment travel
+- disable scale flourishes
+- replace the miss explosion with a brief opacity and line-color change
+- keep correct fade brief and simple
+
+Copy
+Update only copy that becomes inaccurate.
+
+Change:
+“Read the note, find it on the fretboard, and answer before the bar runs out.”
+
+To:
+“Read the note, find it on the fretboard, and answer before the pick reaches the line.”
+
+Do not change unrelated start-screen or results copy.
+
+Implementation guidance
+1. Use a small typed prop interface.
+2. Pass only the data required by the experimental renderer.
+3. Reuse existing types and utilities.
+4. Keep animation presentation-only.
+5. Prefer CSS transitions or keyframes.
+6. Do not add an animation library.
+7. Do not modify dropGameUtils.ts unless strictly necessary.
+8. Do not add a new general-purpose abstraction for this experiment.
+9. Do not rename existing “fallingTargets” model fields merely because the visual direction changes.
+10. Do not perform unrelated cleanup.
+
+Testing
+Add or update only focused tests that are straightforward and useful.
+
+Verify:
+- feature flag true renders the horizontal stage
+- feature flag false preserves the old stage
+- pick position uses existing target progress
+- correct fret clicks still score
+- correct answer removes the pick through the fade behavior
+- wrong clicks retain current behavior
+- timeout still causes a miss at the same timing
+- timeout triggers the restrained impact
+- lives still decrement correctly
+- results still work
+- normal and focus-practice runs still work
+- compact phone landscape remains usable
+- reduced-motion fallback is functional
+- no separate progress bar appears in the experimental stage
+
+Required checks
+Run from fretboard-drop/:
+
+npm run typecheck
+npm test -- --run
+npm run build
+
+Final report
+Report:
+- files added
+- files changed
+- exact feature-flag location
+- how to disable or remove the experiment
+- how existing timing was preserved
+- how horizontal position is calculated
+- correct-answer behavior
+- miss-impact behavior
+- reduced-motion behavior
+- typecheck result
+- test result
+- build result
+
+Do not
+- Do not add an amplifier.
+- Do not add staff notation.
+- Do not add audio-input or microphone features.
+- Do not change gameplay difficulty.
+- Do not change target durations.
+- Do not change adaptive pacing.
+- Do not change scoring or fluency calculations.
+- Do not change analytics schemas.
+- Do not change guided learning.
+- Do not remove the existing stage implementation.
+- Do not make unrelated changes.
+
+End the final response with exactly:
+TASK COMPLETE
+
+Use TASK INCOMPLETE instead only if requested code changes or checks are unfinished, and state the exact remaining work or blocker.

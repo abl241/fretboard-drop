@@ -1,4 +1,5 @@
 import type { Note } from "@/lib/fretboard";
+import type { FretboardStringId, FretboardTargetKey } from "@/lib/fretboardTargets";
 import type { FretboardCellId } from "./dropCellProgress";
 import type { DropRunTrend } from "./dropRunHistory";
 
@@ -35,6 +36,8 @@ export type DropPromptStagePosition = {
 
 export type DropTarget = {
   id: number;
+  targetKey: FretboardTargetKey;
+  stringId: FretboardStringId;
   note: Note;
   stringIndex: DropStringIndex;
   fret: number;

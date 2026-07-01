@@ -1,0 +1,70 @@
+FRETBOARD DROP COLLABORATION BRANCH REQUIREMENT
+
+Repository root:
+ /Users/johnlee/Documents/GitHub/fretboard-drop
+
+Actual app folder:
+ /Users/johnlee/Documents/GitHub/fretboard-drop/fretboard-drop
+
+Prompt folder:
+ /Users/johnlee/Documents/GitHub/fretboard-drop/fretboard-prompts
+
+Current task prompt:
+ fretboard-prompts/FRETBOARD_DROP_HORIZONTAL_DEADLINE_MVP.txt
+
+Important collaboration rule
+All coding changes for this task must be made on a separate feature branch.
+
+Use this branch naming convention:
+ experiment/horizontal-deadline-stage
+
+Instructions
+1. Before making further code changes, inspect the current Git branch and working tree.
+
+2. Do not commit directly to main.
+
+3. Create and switch to:
+   experiment/horizontal-deadline-stage
+
+4. Base the branch on the latest local main only if doing so is safe and does not discard or overwrite any current uncommitted work.
+
+5. If uncommitted task changes already exist on main:
+   - preserve them
+   - create and switch to the new branch with those working-tree changes intact
+   - do not reset, stash, discard, or overwrite them unless absolutely necessary
+
+6. If task changes were already committed directly on main:
+   - stop
+   - do not rewrite history
+   - report exactly what was committed and the commit hash
+   - end with TASK INCOMPLETE
+
+7. After the branch is ready, continue executing:
+   fretboard-prompts/FRETBOARD_DROP_HORIZONTAL_DEADLINE_MVP.txt
+
+8. Keep all application code changes inside:
+   fretboard-drop/
+
+9. Run the requested checks from:
+   /Users/johnlee/Documents/GitHub/fretboard-drop/fretboard-drop
+
+10. At completion:
+   - commit all task changes on experiment/horizontal-deadline-stage
+   - push only that branch
+   - do not merge into main
+   - do not force-push main
+   - leave merging to the collaborator
+
+11. Final report must include:
+   - exact branch name
+   - commit hash
+   - confirmation that main was not modified by this task
+   - confirmation that no merge was performed
+   - typecheck result
+   - test result
+   - build result
+
+End the final response with exactly:
+TASK COMPLETE
+
+Use TASK INCOMPLETE only if the branch could not be created safely, changes were already committed on main, or requested work/checks remain unfinished. State the exact blocker.

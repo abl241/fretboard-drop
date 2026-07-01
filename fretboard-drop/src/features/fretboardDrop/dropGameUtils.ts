@@ -1,4 +1,5 @@
-import { getNoteAtFret, type Note } from "@/lib/fretboard";
+import type { Note } from "@/lib/fretboard";
+import { buildEligibleFretboardTargets, createFretboardTarget, type FretboardTarget } from "@/lib/fretboardTargets";
 import type {
   DropFocusPoolCell,
   DropGameState,
@@ -472,17 +473,14 @@ export function getPostRunSuggestion({
   return "Run it back and beat this score.";
 }
 
-function getPositionsForNote(note: Note, stringSelection: DropStringSelection): { stringIndex: DropStringIndex; fret: number }[] {
-  const positions: { stringIndex: DropStringIndex; fret: number }[] = [];
-  const stringIndexes = normalizeStringSelection(stringSelection);
-  for (const stringIndex of stringIndexes) {
-    for (let fret = DROP_MIN_FRET; fret <= DROP_MAX_FRET; fret += 1) {
-      if (getNoteAtFret(stringIndex, fret) === note) {
-        positions.push({ stringIndex, fret });
-      }
-    }
-  }
-  return positions;
+function getTargetsForNote(note: Note, stringSelection: DropStringSelection): FretboardTarget[] {
+  return buildEligibleFretboardTargets({
+    selectedStringIndexes: normalizeStringSelection(stringSelection),
+    minFret: DROP_MIN_FRET,
+    maxFret: DROP_MAX_FRET,
+    selectedNotes: [note],
+    includeOpenStrings: true,
+  });
 }
 
 export function makeDropTarget(
@@ -501,16 +499,18 @@ export function makeDropTarget(
     const offset = 1 + Math.floor(Math.random() * (playableNotes.length - 1));
     note = playableNotes[(currentIndex + offset) % playableNotes.length];
   }
-  const focusedPositions = getPositionsForNote(note, stringSelection);
-  const positions = focusedPositions.length > 0 ? focusedPositions : getPositionsForNote(note, ALL_DROP_STRING_INDEXES);
-  const position = positions[Math.floor(Math.random() * positions.length)];
+  const focusedTargets = getTargetsForNote(note, stringSelection);
+  const targets = focusedTargets.length > 0 ? focusedTargets : getTargetsForNote(note, ALL_DROP_STRING_INDEXES);
+  const targetIdentity = targets[Math.floor(Math.random() * targets.length)];
   const stagePosition = pickPromptStagePosition(seed, durationOptions.occupiedStagePositions ?? []);
 
   return {
     id: seed,
+    targetKey: targetIdentity.targetKey,
+    stringId: targetIdentity.stringId,
     note,
-    stringIndex: position.stringIndex,
-    fret: position.fret,
+    stringIndex: targetIdentity.stringIndex as DropStringIndex,
+    fret: targetIdentity.fret,
     startedAt: now,
     durationMs: getDropDurationMs(score, { ...durationOptions, seed }),
     stageXPercent: stagePosition.stageXPercent,
@@ -547,9 +547,12 @@ export function makeFocusDropTarget(
   if (!cell) {
     return makeDropTarget(seed, now, score, undefined, DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT, durationOptions);
   }
+  const targetIdentity = createFretboardTarget(cell.stringIndex, cell.fret);
 
   return {
     id: seed,
+    targetKey: targetIdentity.targetKey,
+    stringId: targetIdentity.stringId,
     note: cell.note,
     stringIndex: cell.stringIndex,
     fret: cell.fret,

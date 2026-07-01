@@ -1,12 +1,13 @@
 import { getNoteAtFret, type Note } from "@/lib/fretboard";
+import { createFretboardTargetKey, FRETBOARD_TARGET_TUNING_ID, type FretboardTargetKey } from "@/lib/fretboardTargets";
 import type { DropStringIndex, DropTarget } from "./dropGameTypes";
 
 export const DROP_CELL_PROGRESS_STORAGE_KEY = "fretboard-drop:cell-progress:v1";
 export const DROP_CELL_PROGRESS_SCHEMA_VERSION = 1;
-export const DROP_CELL_PROGRESS_TUNING_ID = "standard";
+export const DROP_CELL_PROGRESS_TUNING_ID = FRETBOARD_TARGET_TUNING_ID;
 export const DROP_CELL_PROGRESS_RECENT_RESOLUTION_LIMIT = 20;
 
-export type FretboardCellId = `standard:${number}:${number}`;
+export type FretboardCellId = FretboardTargetKey;
 export type CellResolutionOutcome = "correct" | "miss";
 
 export type CellResolutionSample = {
@@ -60,7 +61,7 @@ export type CellProgressCellInput = {
 };
 
 export function createFretboardCellId(stringIndex: number, fret: number): FretboardCellId {
-  return `${DROP_CELL_PROGRESS_TUNING_ID}:${stringIndex}:${fret}` as FretboardCellId;
+  return createFretboardTargetKey(stringIndex, fret);
 }
 
 export function getLocalPracticeDateKey(date: Date): string {

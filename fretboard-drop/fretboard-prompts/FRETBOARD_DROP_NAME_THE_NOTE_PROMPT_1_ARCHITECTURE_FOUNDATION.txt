@@ -1,0 +1,322 @@
+FRETBOARD DROP NAME THE NOTE — PROMPT 1
+ARCHITECTURE AUDIT AND SHARED TARGET FOUNDATION
+
+Project source of truth
+Read and follow:
+
+doc/name-the-note/NAME_THE_NOTE_ROADMAP.md
+
+Treat the roadmap as the product and architecture source of truth.
+
+The wireframes in:
+
+doc/name-the-note/
+
+are visual references only. Do not implement the new visual design in this prompt.
+
+Objective
+Prepare the codebase for a future Name the Note mode while preserving the current Fretboard Drop game exactly.
+
+This prompt is limited to:
+
+1. auditing the current architecture
+2. identifying the existing shared and game-specific logic
+3. creating or confirming one canonical fretboard target model
+4. centralizing eligible-target generation where needed
+5. preserving all current behavior
+6. documenting the implementation map and deferred work
+
+Do not build the Name the Note playable mode yet.
+
+Core principle
+Use the smallest clear change that creates a sound shared foundation.
+
+Do not overcomplicate.
+
+Before editing
+Inspect the actual current implementation of:
+
+- Fretboard Drop mode entry and routing
+- target generation
+- tuning and note calculation
+- string selection
+- note selection
+- fret-range selection
+- open-string handling
+- session state
+- score
+- streak or combo
+- session timer
+- question timer
+- results and replay
+- local persistence
+- attempt statistics
+- fluency calculation
+- weak-target or weak-note logic
+- fretboard rendering
+- relevant shared trainer-core utilities
+- relevant tests
+
+Also read only the documentation necessary for this feature area. Do not perform a broad documentation reread.
+
+First report internally before editing
+Before making changes, determine:
+
+- where canonical note and fretboard theory currently live
+- whether more than one target shape exists
+- whether filtering logic is duplicated
+- whether the current game identifies targets semantically or by UI coordinates
+- how fret 0 or open strings are represented
+- where current stats and fluency are calculated
+- whether changing the shared target shape would affect saved data
+- which files truly need modification
+
+Do not stop after the audit. Proceed with the smallest safe implementation described below.
+
+Required architecture
+
+1. Canonical fretboard target
+
+Create or confirm one canonical target model suitable for both:
+
+- current Fretboard Drop
+- future Name the Note
+
+It must provide:
+
+- stable target key
+- stable string identity
+- string index when useful for rendering
+- fret number
+- canonical note or pitch class
+
+Conceptually:
+
+```ts
+type FretboardTarget = {
+  targetKey: string;
+  stringId: string;
+  stringIndex: number;
+  fret: number;
+  note: NoteName;
+};
+```
+
+Adapt this shape to the project’s existing type conventions.
+
+Rules:
+
+- fret 0 represents an open string in the data model
+- target identity must not depend on CSS classes, DOM nodes, or pixel coordinates
+- target keys must be deterministic
+- do not create a second incompatible target model
+- preserve current persisted identifiers when practical
+- add a compatibility adapter instead of a broad migration when that is simpler and safer
+
+2. Shared eligible-target generation
+
+Create or confirm one shared pure pipeline that can produce valid fretboard targets from settings.
+
+It must support:
+
+- selected strings
+- fret minimum
+- fret maximum
+- selected notes
+- inclusion or exclusion of open strings
+- current tuning and note naming rules
+
+The expected flow is:
+
+```text
+all canonical fretboard positions
+→ apply selected-string filter
+→ apply fret-range filter
+→ apply selected-note filter
+→ apply open-string rule
+→ return eligible targets
+```
+
+Requirements:
+
+- keep the function pure where practical
+- preserve deterministic output where the current game depends on it
+- keep random target selection separate from pool generation
+- do not embed UI or scoring logic
+- do not duplicate this filter pipeline for the future mode
+- preserve current game behavior exactly
+
+3. Current game compatibility
+
+Update the current Fretboard Drop implementation only as needed to consume the canonical target and shared target pool.
+
+Do not change:
+
+- gameplay direction
+- score behavior
+- question timing
+- session timing
+- streak behavior
+- target frequency
+- weak-area behavior
+- results
+- Play Again
+- filters
+- saved settings
+- current visuals
+
+If exact behavior cannot be preserved through the proposed extraction, stop and choose a smaller compatibility layer.
+
+4. Open-string semantics
+
+Represent open strings semantically as fret 0.
+
+Do not implement the new separate OPEN visual zone yet.
+
+Confirm that:
+
+- fret 0 can be generated and filtered correctly
+- excluding open strings removes fret 0
+- including open strings allows valid open-string targets
+- no existing behavior is broken
+
+5. Stats and fluency preservation
+
+Do not redesign statistics or fluency in this prompt.
+
+Locate and document:
+
+- current attempt record shape
+- current fluency formula location
+- current weak-target selection location
+- persistence keys and versions
+
+Only make changes required to preserve compatibility with the canonical target.
+
+Do not change existing fluency outputs.
+
+6. Renderer boundary
+
+Do not redesign the fretboard renderer.
+
+Only make a minimal boundary improvement if the current renderer directly owns or invents target identity.
+
+The renderer should receive semantic target information rather than calculate the target from display coordinates.
+
+Do not add:
+
+- realistic wood styling
+- new target marker
+- countdown visual
+- open-string visual zone
+- correct, incorrect, or timeout animations
+
+7. Audit document
+
+Create:
+
+doc/name-the-note/PROMPT_1_ARCHITECTURE_AUDIT.md
+
+Keep it concise but useful.
+
+Include:
+
+- current architecture map
+- canonical target location
+- shared target-generation location
+- current game adapter or integration path
+- current stats and fluency locations
+- persistence compatibility notes
+- files changed
+- deferred work for later prompts
+- any risks discovered
+
+Do not duplicate the full roadmap.
+
+Technical-debt guardrails
+
+- Do not clone the current game.
+- Do not build a generalized game plugin framework.
+- Do not create speculative abstractions for future modes.
+- Do not add backend, auth, database, PostHog, feature flags, or session replay.
+- Do not alter unrelated GuitarRise modes.
+- Do not change the current visual design.
+- Do not rename broad groups of files without need.
+- Do not introduce provider-specific dependencies.
+- Do not scatter note calculation across UI components.
+- Do not place filtering logic inside React rendering.
+- Do not use target display coordinates as domain identity.
+- Prefer a small shared utility and compatibility adapter over a broad refactor.
+- Keep types explicit and code easy to trace.
+- Remove dead code only when it is directly replaced by this work.
+- Do not add comments that merely restate the code.
+
+Testing
+
+Add or update focused tests for:
+
+- stable target-key generation
+- note calculation for representative strings and frets
+- selected-string filtering
+- fret-range filtering
+- selected-note filtering
+- inclusion of open strings
+- exclusion of open strings
+- empty eligible-target handling
+- current game compatibility where test coverage supports it
+
+Run the relevant existing checks, including:
+
+- typecheck
+- focused tests
+- broader relevant test suite
+- production build for affected packages
+
+Do not use:
+
+- Playwright
+- browser automation
+- screenshot testing
+- live preview
+
+The user will manually test in the browser later.
+
+Acceptance criteria
+
+This prompt is complete only when:
+
+1. One canonical semantic fretboard target model exists or is clearly confirmed.
+2. One shared eligible-target generator exists or is clearly confirmed.
+3. The current Fretboard Drop game still uses equivalent target behavior.
+4. Open strings are represented as fret 0 without visual redesign.
+5. Existing score, timing, fluency, weak-area, results, and replay behavior remain unchanged.
+6. Focused tests cover the shared target foundation.
+7. The architecture audit document exists.
+8. Relevant typecheck, tests, and build complete successfully, or any unrelated pre-existing failure is clearly reported.
+9. No Name the Note playable UI is added yet.
+10. No unrelated refactor is included.
+
+Final response
+
+Report:
+
+1. architecture findings
+2. files changed
+3. canonical target model location
+4. shared target-generation location
+5. how current game compatibility was preserved
+6. open-string semantics
+7. stats and fluency locations discovered
+8. tests and checks run
+9. deferred work for Prompt 2
+10. any known risk or blocker
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use:
+
+TASK INCOMPLETE
+
+when requested work remains unfinished, and state the exact remaining work or blocker.

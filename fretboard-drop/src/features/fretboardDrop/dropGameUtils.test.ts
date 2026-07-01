@@ -54,6 +54,8 @@ describe("Fretboard Drop utilities", () => {
     expect(NATURAL_DROP_NOTES).toContain(target.note);
     expect(isNoteInCurrentPool(target.note)).toBe(true);
     expect(getNoteAtFret(target.stringIndex, target.fret)).toBe(target.note);
+    expect(target.targetKey).toBe(`standard:${target.stringIndex}:${target.fret}`);
+    expect(target.stringId).toBe(`standard:${target.stringIndex}`);
     vi.restoreAllMocks();
   });
 
@@ -118,6 +120,7 @@ describe("Fretboard Drop utilities", () => {
     for (let seed = 1; seed <= 6; seed += 1) {
       const target = makeFocusDropTarget(seed, 0, 0, pool);
       expect(pool.some((cell) => cell.stringIndex === target.stringIndex && cell.fret === target.fret && cell.note === target.note)).toBe(true);
+      expect(target.targetKey).toBe(`standard:${target.stringIndex}:${target.fret}`);
     }
   });
 
