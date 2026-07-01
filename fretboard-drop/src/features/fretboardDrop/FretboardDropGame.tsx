@@ -80,6 +80,7 @@ import {
   recordWrongTargetCellProgress,
 } from "./dropCellProgress";
 import { FretboardDropStats } from "./FretboardDropStats";
+import { HorizontalDeadlineStage } from "./HorizontalDeadlineStage";
 
 const DEV_BUILD_NOTE = "Dev note: 3D mouse zoom and material separation polished.";
 const PHONE_LANDSCAPE_MEDIA_QUERY = "(orientation: landscape) and (max-height: 520px) and (max-width: 950px)";
@@ -87,6 +88,7 @@ const DROP_RUN_MODE = "standard-60s";
 const DROP_FOCUS_RUN_MODE = "focus-practice";
 const DROP_TUNING_KEY = `standard-${OPEN_STRING_NOTES.join("-").toLowerCase()}`;
 const INSTANT_RECALL_PROGRESS_CUTOFF = 0.3;
+export const USE_HORIZONTAL_DEADLINE_STAGE = true;
 
 type DropGameAction =
   | {
@@ -404,8 +406,10 @@ function createRunHistoryEntry({
 
 export function FretboardDropGame({
   onSwitchToGuided,
+  useHorizontalDeadlineStage = USE_HORIZONTAL_DEADLINE_STAGE,
 }: {
   onSwitchToGuided?: () => void;
+  useHorizontalDeadlineStage?: boolean;
 } = {}) {
   const [practiceContext, setPracticeContext] = useState<DropPracticeContext>(DEFAULT_DROP_PRACTICE_CONTEXT);
   const [bestScore, setBestScore] = useState(() => readBestDropScore(DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT));
@@ -837,17 +841,34 @@ export function FretboardDropGame({
                 focusPoolSize={state.focusPool.length}
                 onHome={goHome}
               />
-              <div className="drop-game-field grid min-h-0 flex-1 gap-2 lg:grid-rows-[minmax(430px,1fr)_auto]">
-                <DropStage
-                  cue={state.stageCue}
-                  fallingTargets={state.fallingTargets}
-                  animationTime={animationTime}
-                  activeTargetId={playableTarget?.id ?? null}
-                  combo={state.combo}
-                  stringSelection={state.stringSelection}
-                  practiceContext={state.practiceContext}
-                  targetHeightPx={promptSizePx}
-                />
+              <div className={`drop-game-field grid min-h-0 flex-1 gap-2 ${
+                useHorizontalDeadlineStage
+                  ? "content-end lg:grid-rows-[minmax(210px,0.44fr)_auto]"
+                  : "lg:grid-rows-[minmax(430px,1fr)_auto]"
+              }`}>
+                {useHorizontalDeadlineStage ? (
+                  <HorizontalDeadlineStage
+                    cue={state.stageCue}
+                    fallingTargets={state.fallingTargets}
+                    animationTime={animationTime}
+                    activeTargetId={playableTarget?.id ?? null}
+                    combo={state.combo}
+                    stringSelection={state.stringSelection}
+                    practiceContext={state.practiceContext}
+                    targetSizePx={promptSizePx}
+                  />
+                ) : (
+                  <DropStage
+                    cue={state.stageCue}
+                    fallingTargets={state.fallingTargets}
+                    animationTime={animationTime}
+                    activeTargetId={playableTarget?.id ?? null}
+                    combo={state.combo}
+                    stringSelection={state.stringSelection}
+                    practiceContext={state.practiceContext}
+                    targetHeightPx={promptSizePx}
+                  />
+                )}
                 <div className="drop-fretboard-wrap relative">
                   <div className="pointer-events-none absolute -top-2 left-1/2 z-10 h-4 w-px -translate-x-1/2 bg-cyan-200/45 shadow-[0_0_16px_rgba(103,232,249,0.55)]" />
                   <DropGameFretboard
@@ -1030,7 +1051,7 @@ function DropStartScreen({
           <p className="drop-dev-note mt-2 text-xs font-semibold text-slate-500">{DEV_BUILD_NOTE}</p>
         ) : null}
         <p className="drop-start-subtitle mx-auto mt-4 max-w-lg text-lg font-semibold leading-relaxed text-slate-200">
-          Read the note, find it on the fretboard, and answer before the bar runs out.
+          Read the note, find it on the fretboard, and answer before the pick reaches the line.
         </p>
         <StringPracticeSelector value={stringSelection} onChange={onStringSelectionChange} />
         <NoteFocusSelector value={practiceContext} onChange={onPracticeContextChange} />

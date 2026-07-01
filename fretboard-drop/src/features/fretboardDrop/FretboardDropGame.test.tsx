@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { writeBestDropScore } from "./dropGameUtils";
+import { getTargetProgress, writeBestDropScore } from "./dropGameUtils";
 import { appendCompletedRunToHistory } from "./dropRunHistory";
 import { FretboardDropGame } from "./FretboardDropGame";
+import { HorizontalDeadlineStage, getHorizontalDeadlinePickRightPercent } from "./HorizontalDeadlineStage";
 import {
   DROP_CELL_PROGRESS_STORAGE_KEY,
   LocalStorageCellProgressRepository,
@@ -26,6 +27,10 @@ function getStringButton(label: string): HTMLElement {
 
 function getPracticeNoteButton(note: string): HTMLElement {
   return screen.getByRole("button", { name: `Practice note ${note}` });
+}
+
+function getHorizontalDeadlinePick(state = "active"): HTMLElement {
+  return screen.getAllByTestId("horizontal-deadline-pick").find((pick) => pick.getAttribute("data-state") === state)!;
 }
 
 function togglePracticeNote(note: string): void {
@@ -91,7 +96,7 @@ describe("FretboardDropGame", () => {
   it("shows practice strings on the start screen with high E selected by default", () => {
     render(<FretboardDropGame />);
 
-    expect(screen.getByText("Read the note, find it on the fretboard, and answer before the bar runs out.")).toBeInTheDocument();
+    expect(screen.getByText("Read the note, find it on the fretboard, and answer before the pick reaches the line.")).toBeInTheDocument();
     expect(screen.getByText("Practice Strings")).toBeInTheDocument();
     expect(screen.getByText("Selected: high E")).toBeInTheDocument();
     expect(screen.getByText("Practice notes:")).toBeInTheDocument();
@@ -127,6 +132,87 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Play" })[0]);
 
     expect(getActiveNotePromptLabel()).toBeInTheDocument();
+  });
+
+  it("renders the horizontal deadline stage when the feature flag is enabled", () => {
+    render(<FretboardDropGame />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    const stage = screen.getByTestId("horizontal-deadline-stage");
+    expect(stage).toBeInTheDocument();
+    expect(getActiveNotePromptLabel()).toBeInTheDocument();
+    expect(stage.querySelector(".drop-note-prompt")).toBeNull();
+  });
+
+  it("preserves the old drop stage when the horizontal deadline feature flag is disabled", () => {
+    const { container } = render(<FretboardDropGame useHorizontalDeadlineStage={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    expect(screen.queryByTestId("horizontal-deadline-stage")).not.toBeInTheDocument();
+    expect(container.querySelector(".drop-stage")).toBeInTheDocument();
+    expect(getActiveNotePromptLabel()).toBeInTheDocument();
+  });
+
+  it("maps the active pick position from existing target progress", () => {
+    const target = {
+      id: 7,
+      note: "A" as const,
+      stringIndex: 0 as const,
+      fret: 5,
+      startedAt: 1_000,
+      durationMs: 1_000,
+      stageXPercent: 20,
+      stageYPercent: 20,
+    };
+    const progress = getTargetProgress(target, 1_500);
+
+    render(
+      <HorizontalDeadlineStage
+        cue={null}
+        fallingTargets={[target]}
+        animationTime={1_500}
+        activeTargetId={target.id}
+        combo={0}
+        stringSelection={[0]}
+        practiceContext={{ practiceType: "string-focus", selectedNotes: null }}
+        targetSizePx={88}
+      />,
+    );
+
+    const pick = getHorizontalDeadlinePick();
+    expect(pick).toHaveAttribute("data-progress", progress.toFixed(3));
+    expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickRightPercent(progress).toFixed(2));
+  });
+
+  it("uses compact pick sizing in phone landscape while keeping the deadline visible", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: query.includes("orientation: landscape"),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    expect(screen.getByTestId("horizontal-deadline-line")).toBeInTheDocument();
+    expect(getHorizontalDeadlinePick()).toHaveStyle({ width: "65px", height: "65px" });
+  });
+
+  it("marks the horizontal stage reduced-motion fallback when requested", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    expect(screen.getByTestId("horizontal-deadline-stage")).toHaveAttribute("data-motion", "reduced");
   });
 
   it("switches Stats metrics and keeps no-data cells neutral", async () => {
@@ -611,6 +697,17 @@ describe("FretboardDropGame", () => {
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
+  it("keeps scoring on correct fret clicks and fades the resolved pick", () => {
+    render(<FretboardDropGame />);
+
+    selectAOnly();
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
+
+    expect(screen.getAllByText("1").length).toBeGreaterThan(0);
+    expect(getHorizontalDeadlinePick("resolved-correct")).toBeInTheDocument();
+  });
+
   it("persists correct target-cell evidence on target resolution", async () => {
     render(<FretboardDropGame />);
 
@@ -714,6 +811,8 @@ describe("FretboardDropGame", () => {
     const reveal = screen.getByTestId("miss-reveal");
     expect(reveal).toBeInTheDocument();
     expect(reveal.textContent).toMatch(/^[A-G]$/);
+    expect(screen.getByTestId("horizontal-deadline-impact")).toBeInTheDocument();
+    expect(screen.getByTestId("horizontal-deadline-line")).toHaveAttribute("data-state", "miss");
     expect(screen.queryByLabelText(/Note prompt .+ \(active\)/)).not.toBeInTheDocument();
 
     act(() => {
