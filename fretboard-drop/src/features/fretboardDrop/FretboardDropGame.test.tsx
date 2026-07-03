@@ -207,6 +207,36 @@ describe("FretboardDropGame", () => {
     expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickRightPercent(progress).toFixed(2));
   });
 
+  it("spawns the next horizontal pick from the left after the active pick is resolved", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    render(<FretboardDropGame />);
+    selectAOnly();
+    selectPracticeTempo();
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    const startPosition = getHorizontalDeadlinePickRightPercent(0).toFixed(2);
+
+    act(() => {
+      nextAnimationFrame?.(performance.now() + 3_000);
+    });
+
+    expect(
+      screen.getAllByTestId("horizontal-deadline-pick").filter((pick) => pick.getAttribute("data-state") === "active"),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
+
+    const newPick = getHorizontalDeadlinePick("active");
+    expect(newPick).toHaveAttribute("data-position-percent", startPosition);
+    expect(newPick).toHaveAttribute("data-progress", "0.000");
+  });
+
   it("uses compact pick sizing in phone landscape while keeping the deadline visible", () => {
     vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
       matches: query.includes("orientation: landscape"),

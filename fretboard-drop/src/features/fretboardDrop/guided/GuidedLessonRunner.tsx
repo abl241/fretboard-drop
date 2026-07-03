@@ -12,7 +12,7 @@ import {
   getTargetTopStyle,
   isMatchingFret,
 } from "../dropGameUtils";
-import { playFretboardNote, readNoteSoundEnabled } from "../dropNoteAudio";
+import { playFretboardNote, playWrongBuzz, readNoteSoundEnabled } from "../dropNoteAudio";
 import {
   GUIDED_FLUENCY_SCORE_VERSION,
   calculateGuidedFluency,
@@ -315,7 +315,11 @@ export function GuidedLessonRunner({
 
     const clickedString = stringIndex as DropStringIndex;
     if (readNoteSoundEnabled()) {
-      playFretboardNote({ stringIndex: clickedString, fret });
+      if (isMatchingFret(stringIndex, fret, activeTarget)) {
+        playFretboardNote({ stringIndex: clickedString, fret });
+      } else {
+        playWrongBuzz();
+      }
     }
 
     if (!isMatchingFret(stringIndex, fret, activeTarget)) {

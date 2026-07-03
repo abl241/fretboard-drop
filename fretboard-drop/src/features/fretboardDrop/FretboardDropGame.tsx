@@ -70,7 +70,7 @@ import {
   writeBestFluencyScore,
 } from "./dropFluencyScore";
 import { getResultsMotivation, getResultsMotivationMessage } from "./dropResultsMotivation";
-import { playFretboardNote, readNoteSoundEnabled, writeNoteSoundEnabled } from "./dropNoteAudio";
+import { playFretboardNote, playWrongBuzz, readNoteSoundEnabled, writeNoteSoundEnabled } from "./dropNoteAudio";
 import {
   appendCompletedRunToHistory,
   getLastFiveTrend,
@@ -135,6 +135,12 @@ function resolveCorrectHit(
 }
 
 function applyStreamSpawn(state: DropGameState, now: number): DropGameState {
+  // Horizontal deadline shows one pick at a time from the left; don't pre-spawn
+  // upcoming targets while the active pick is still moving.
+  if (USE_HORIZONTAL_DEADLINE_STAGE && state.fallingTargets.length > 0) {
+    return state;
+  }
+
   const spawned = spawnStreamTarget({
     fallingTargets: state.fallingTargets,
     targetSeed: state.targetSeed,
@@ -775,7 +781,11 @@ export function FretboardDropGame({
     const now = performance.now();
     const playableTarget = getPlayableFallingTarget(state.fallingTargets, now);
     if (noteSoundEnabled && playableTarget?.stringIndex === stringIndex) {
-      playFretboardNote({ stringIndex: playableTarget.stringIndex, fret });
+      if (isMatchingFret(stringIndex, fret, playableTarget)) {
+        playFretboardNote({ stringIndex: playableTarget.stringIndex, fret });
+      } else {
+        playWrongBuzz();
+      }
     }
     if (state.status === "playing" && playableTarget?.stringIndex === stringIndex) {
       if (isMatchingFret(stringIndex, fret, playableTarget)) {
