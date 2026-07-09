@@ -24,14 +24,9 @@ Use these principles when making decisions:
 
 ## Scope Lock
 
-All future work should stay inside:
-
-`artifacts/fretboard-drop`
+All future work should stay inside this repository.
 
 Do not edit:
-
-- `artifacts/guitar-trainer`
-- shared packages unless absolutely necessary and explicitly requested
 - auth
 - backend
 - Transcribe
@@ -48,7 +43,7 @@ Keep the app frontend-only until the core loop is clearly proven.
 
 As of the current checkpoint, Fretboard Drop has:
 
-- standalone app in `artifacts/fretboard-drop`
+- standalone app in this repository
 - separate Vercel deployment
 - multi-string selection
 - frets limited to 0–11

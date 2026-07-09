@@ -206,11 +206,12 @@ button {
 
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 950px) {
   .horizontal-deadline-stage {
-    min-height: 8.5rem !important;
+    min-height: 4.75rem !important;
+    max-height: 24dvh !important;
   }
 
   .horizontal-deadline-pick-note {
-    font-size: 1.95rem;
+    font-size: 1.65rem;
   }
 }
 
@@ -764,32 +765,45 @@ button {
 }
 
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 950px) {
+  html,
   body {
+    height: 100dvh;
     overflow: hidden;
   }
 
   .drop-app-shell {
+    height: 100dvh !important;
     min-height: 100dvh !important;
-    padding: 0.25rem 0.75rem !important;
+    max-height: 100dvh !important;
+    padding:
+      max(0.5rem, env(safe-area-inset-top))
+      max(1.25rem, env(safe-area-inset-right))
+      max(0.75rem, env(safe-area-inset-bottom))
+      max(1.25rem, env(safe-area-inset-left)) !important;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .drop-app-shell--scrollable {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
 
   .drop-start-screen {
     align-items: flex-start !important;
-    overflow: hidden;
-    padding-block: 0.35rem !important;
+    flex: 1 0 auto !important;
+    overflow: visible !important;
+    min-height: auto !important;
+    padding-block: 0.35rem 1rem !important;
   }
 
   .drop-start-panel {
     max-width: 56rem !important;
   }
 
-  .drop-start-eyebrow {
-    font-size: 0.58rem !important;
-    letter-spacing: 0.26em !important;
-  }
-
   .drop-start-title {
-    margin-top: 0.25rem !important;
     font-size: clamp(2rem, 7vw, 2.75rem) !important;
     line-height: 1 !important;
   }
@@ -801,8 +815,9 @@ button {
 
   .drop-start-subtitle {
     margin-top: 0.3rem !important;
-    font-size: 0.82rem !important;
-    line-height: 1.25 !important;
+    font-size: 0.72rem !important;
+    line-height: 1.2 !important;
+    white-space: nowrap;
   }
 
   .drop-string-selector {
@@ -812,11 +827,6 @@ button {
   .drop-string-selector-heading {
     font-size: 0.58rem !important;
     letter-spacing: 0.2em !important;
-  }
-
-  .drop-string-summary {
-    margin-top: 0.15rem !important;
-    font-size: 0.72rem !important;
   }
 
   .drop-string-grid {
@@ -837,11 +847,6 @@ button {
     font-size: 0.75rem !important;
   }
 
-  .drop-note-focus-summary {
-    margin-top: 0.1rem !important;
-    font-size: 0.68rem !important;
-  }
-
   .drop-note-focus-grid {
     gap: 0.3rem !important;
     margin-top: 0.25rem !important;
@@ -853,6 +858,31 @@ button {
     border-radius: 0.45rem !important;
     font-size: 0.72rem !important;
     padding-inline: 0.55rem !important;
+  }
+
+  .drop-speed-selector {
+    margin-top: 0.4rem !important;
+  }
+
+  .drop-speed-grid {
+    gap: 0.3rem !important;
+    margin-top: 0.25rem !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .drop-speed-button {
+    min-height: 0 !important;
+    padding: 0.35rem 0.45rem !important;
+    border-radius: 0.45rem !important;
+  }
+
+  .drop-speed-button span:first-child {
+    font-size: 0.68rem !important;
+  }
+
+  .drop-speed-button span:nth-child(2),
+  .drop-speed-button span:nth-child(3) {
+    display: none !important;
   }
 
   .drop-start-helper,
@@ -943,27 +973,32 @@ button {
   }
 
   .drop-game-field {
-    grid-template-rows: minmax(220px, 1fr) auto !important;
-    gap: 0.1rem !important;
+    grid-template-rows: minmax(4.75rem, 0.22fr) minmax(0, 1fr) !important;
+    gap: 0.35rem !important;
   }
 
   .drop-stage {
-    min-height: clamp(210px, 58dvh, 250px) !important;
+    min-height: clamp(4.75rem, 22dvh, 6.5rem) !important;
+    max-height: 24dvh !important;
     border-radius: 0.45rem !important;
   }
 
+  .drop-fretboard-wrap {
+    min-height: 0;
+  }
+
   .drop-fretboard {
-    padding: 0.12rem !important;
+    padding: 0.2rem !important;
     border-radius: 0.45rem !important;
   }
 
   .drop-fretboard-string-row {
     grid-template-columns: 1.6rem repeat(12, minmax(0, 1fr)) !important;
-    min-height: 1rem !important;
+    min-height: 1.45rem !important;
   }
 
   .drop-fretboard-cell {
-    min-height: 1rem !important;
+    min-height: 1.45rem !important;
   }
 
   .drop-fretboard .grid:first-child,
@@ -987,7 +1022,8 @@ button {
 
   .drop-results-screen {
     align-items: flex-start !important;
-    overflow: hidden;
+    flex: 1 0 auto !important;
+    overflow: visible !important;
     padding-block: 0 !important;
   }
 

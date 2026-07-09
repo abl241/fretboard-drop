@@ -56,7 +56,7 @@ export function HorizontalDeadlineStage({
 
   return (
     <div
-      className={`horizontal-deadline-stage relative min-h-[170px] overflow-hidden rounded-lg border border-cyan-200/18 bg-slate-950/88 transition-colors duration-150 sm:min-h-[190px] lg:min-h-[220px] ${
+      className={`horizontal-deadline-stage relative min-h-[130px] overflow-hidden rounded-lg border border-cyan-200/18 bg-slate-950/88 transition-colors duration-150 sm:min-h-[150px] lg:min-h-[170px] ${
         cue?.kind === "miss" ? "border-red-300/48" : "border-cyan-300/18"
       }`}
       data-testid="horizontal-deadline-stage"

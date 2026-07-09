@@ -4,8 +4,8 @@ This document is the standing instruction guide for future Codex work on the sta
 
 ## Project Scope
 
-- Work only inside `artifacts/fretboard-drop` unless explicitly instructed otherwise.
-- Do not modify GuitarRise, Transcribe, Rhythm Lab, SongCue, auth, backend, shared packages, or unrelated projects.
+- Work in this repository unless explicitly instructed otherwise.
+- Do not modify GuitarRise, Transcribe, Rhythm Lab, SongCue, auth, backend, or unrelated projects.
 - Keep Fretboard Drop independent from the larger GuitarRise/Guitar Guru app.
 
 ## Product Vision
@@ -68,9 +68,9 @@ Avoid broad refactors unless they clearly reduce risk or unlock the requested wo
 
 Run only:
 
-- `pnpm --filter @workspace/fretboard-drop typecheck`
-- `pnpm --filter @workspace/fretboard-drop test`
-- `pnpm --filter @workspace/fretboard-drop build`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
 
 Do not run:
 

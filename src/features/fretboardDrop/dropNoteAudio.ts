@@ -14,6 +14,11 @@ type ActiveSound = {
 let activeSound: ActiveSound | null = null;
 let audioContext: AudioContext | null = null;
 
+export function resetDropNoteAudioForTests(): void {
+  activeSound = null;
+  audioContext = null;
+}
+
 type AudioWindow = Window & typeof globalThis & {
   webkitAudioContext?: typeof AudioContext;
 };
@@ -56,10 +61,14 @@ function getAudioContext(): AudioContext | null {
   return audioContext;
 }
 
-function prepareAudioContext(context: AudioContext): void {
-  if (context.state === "suspended") {
-    void context.resume();
-  }
+export function unlockNoteAudio(): Promise<boolean> {
+  const context = getAudioContext();
+  if (!context) return Promise.resolve(false);
+  if (context.state === "running") return Promise.resolve(true);
+  return context
+    .resume()
+    .then(() => context.state === "running")
+    .catch(() => false);
 }
 
 function stopActiveSound(now: number): void {
@@ -134,20 +143,18 @@ function createPickAttackBuffer(context: AudioContext, volume: number): AudioBuf
   return buffer;
 }
 
-export function playFretboardNote({
-  stringIndex,
-  fret,
-  volume = 0.2,
-}: {
-  stringIndex: DropStringIndex;
-  fret: number;
-  volume?: number;
-}): void {
-  const context = getAudioContext();
-  if (!context) return;
-
-  prepareAudioContext(context);
-
+function playFretboardNoteOnContext(
+  context: AudioContext,
+  {
+    stringIndex,
+    fret,
+    volume = 0.2,
+  }: {
+    stringIndex: DropStringIndex;
+    fret: number;
+    volume?: number;
+  },
+): void {
   const now = context.currentTime;
   stopActiveSound(now);
 
@@ -210,16 +217,25 @@ export function playFretboardNote({
   }, PLUCK_DURATION_SEC);
 }
 
-export function playWrongBuzz({
-  volume = 0.09,
+export function playFretboardNote({
+  stringIndex,
+  fret,
+  volume = 0.2,
 }: {
+  stringIndex: DropStringIndex;
+  fret: number;
   volume?: number;
-} = {}): void {
+}): void {
   const context = getAudioContext();
   if (!context) return;
 
-  prepareAudioContext(context);
+  void unlockNoteAudio().then((ready) => {
+    if (!ready) return;
+    playFretboardNoteOnContext(context, { stringIndex, fret, volume });
+  });
+}
 
+function playWrongBuzzOnContext(context: AudioContext, volume = 0.09): void {
   const now = context.currentTime;
   stopActiveSound(now);
 
@@ -276,4 +292,18 @@ export function playWrongBuzz({
       // Source may already be stopped.
     }
   }, 0.24);
+}
+
+export function playWrongBuzz({
+  volume = 0.09,
+}: {
+  volume?: number;
+} = {}): void {
+  const context = getAudioContext();
+  if (!context) return;
+
+  void unlockNoteAudio().then((ready) => {
+    if (!ready) return;
+    playWrongBuzzOnContext(context, volume);
+  });
 }

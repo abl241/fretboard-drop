@@ -70,7 +70,7 @@ import {
   writeBestFluencyScore,
 } from "./dropFluencyScore";
 import { getResultsMotivation, getResultsMotivationMessage } from "./dropResultsMotivation";
-import { playFretboardNote, playWrongBuzz, readNoteSoundEnabled, writeNoteSoundEnabled } from "./dropNoteAudio";
+import { playFretboardNote, playWrongBuzz, readNoteSoundEnabled, unlockNoteAudio, writeNoteSoundEnabled } from "./dropNoteAudio";
 import {
   appendCompletedRunToHistory,
   getLastFiveTrend,
@@ -97,15 +97,15 @@ export const USE_HORIZONTAL_DEADLINE_STAGE = true;
 
 type DropGameAction =
   | {
-      type: "start";
-      now: number;
-      bestScore: number;
-      stringSelection: DropStringSelection;
-      practiceContext: DropPracticeContext;
-      speedMode: DropSpeedMode;
-      runMode?: "normal" | "focus";
-      focusPool?: readonly DropFocusPoolCell[];
-    }
+    type: "start";
+    now: number;
+    bestScore: number;
+    stringSelection: DropStringSelection;
+    practiceContext: DropPracticeContext;
+    speedMode: DropSpeedMode;
+    runMode?: "normal" | "focus";
+    focusPool?: readonly DropFocusPoolCell[];
+  }
   | { type: "reset"; now: number }
   | { type: "tick"; now: number }
   | { type: "fret-click"; now: number; stringIndex: number; fret: number; note: Note }
@@ -452,6 +452,7 @@ export function FretboardDropGame({
   const [animationNow, setAnimationNow] = useState(() => performance.now());
   const promptSizePx = useDropPromptSizePx();
   const isWarmSurface = state.status === "start" || state.status === "complete";
+  const shellScrollable = state.status !== "playing";
   const completedRunTrackedRef = useRef<number | null>(null);
   const missProgressRecordedRef = useRef<number | null>(null);
 
@@ -693,6 +694,7 @@ export function FretboardDropGame({
   }
 
   function startRun(selectionOverride?: DropStringSelection) {
+    void unlockNoteAudio();
     const runSelection = normalizeStringSelection(selectionOverride ?? stringSelection);
     const runPracticeContext = normalizePracticeContext(practiceContext);
     const latestBest = readBestDropScore(runSelection, runPracticeContext, speedMode);
@@ -720,6 +722,7 @@ export function FretboardDropGame({
 
   function startFocusPractice(focusPool: readonly DropFocusPoolCell[]) {
     if (focusPool.length === 0) return;
+    void unlockNoteAudio();
     const runSelection = normalizeStringSelection(
       ALL_DROP_STRING_INDEXES.filter((stringIndex) => focusPool.some((cell) => cell.stringIndex === stringIndex)),
     );
@@ -807,18 +810,20 @@ export function FretboardDropGame({
   function handleNoteSoundChange(isEnabled: boolean) {
     setNoteSoundEnabled(isEnabled);
     writeNoteSoundEnabled(isEnabled);
+    if (isEnabled) {
+      void unlockNoteAudio();
+    }
   }
 
   return (
     <div className="min-h-[calc(100vh-1px)] bg-[#080a0f] text-slate-50">
       <div
-        className={`min-h-[calc(100vh-1px)] ${
-          isWarmSurface
+        className={`min-h-[calc(100vh-1px)] ${isWarmSurface
             ? "bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.24),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(120,53,15,0.22),transparent_40%),linear-gradient(180deg,rgba(14,165,233,0.035),transparent_36%)]"
             : "bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.18),transparent_30%),linear-gradient(180deg,rgba(14,165,233,0.08),transparent_40%)]"
-        }`}
+          }`}
       >
-        <div className="drop-app-shell mx-auto flex min-h-[calc(100vh-1px)] max-w-7xl flex-col px-3 py-3 sm:px-5 sm:py-4">
+        <div className={`drop-app-shell mx-auto flex min-h-[calc(100vh-1px)] max-w-7xl flex-col px-3 py-3 sm:px-5 sm:py-4${shellScrollable ? " drop-app-shell--scrollable" : ""}`}>
           {state.status === "start" && showStats ? (
             <FretboardDropStats
               onBack={() => setShowStats(false)}
@@ -894,11 +899,10 @@ export function FretboardDropGame({
                 focusPoolSize={state.focusPool.length}
                 onHome={goHome}
               />
-              <div className={`drop-game-field grid min-h-0 flex-1 gap-2 ${
-                useHorizontalDeadlineStage
-                  ? "content-end lg:grid-rows-[minmax(210px,0.44fr)_auto]"
-                  : "lg:grid-rows-[minmax(430px,1fr)_auto]"
-              }`}>
+              <div className={`drop-game-field grid min-h-0 flex-1 gap-2 ${useHorizontalDeadlineStage
+                  ? "content-end lg:grid-rows-[minmax(120px,0.26fr)_minmax(0,1fr)]"
+                  : "lg:grid-rows-[minmax(280px,0.55fr)_minmax(0,1fr)]"
+                }`}>
                 {useHorizontalDeadlineStage ? (
                   <HorizontalDeadlineStage
                     cue={state.stageCue}
@@ -1037,10 +1041,10 @@ function StageCue({ cue }: { cue: DropStageCue }) {
     cue.kind === "tier-up"
       ? "border-cyan-100/75 bg-cyan-300/18 text-cyan-50 shadow-[0_0_34px_rgba(103,232,249,0.2)]"
       : cue.kind === "correct"
-      ? "border-amber-100/80 bg-amber-300/25 text-amber-50 shadow-[0_0_30px_rgba(251,191,36,0.18)]"
-      : cue.kind === "wrong"
-        ? "border-red-200/55 bg-red-400/14 text-red-50"
-        : "border-red-200/70 bg-red-400/18 text-red-50 shadow-[0_0_28px_rgba(248,113,113,0.14)]";
+        ? "border-amber-100/80 bg-amber-300/25 text-amber-50 shadow-[0_0_30px_rgba(251,191,36,0.18)]"
+        : cue.kind === "wrong"
+          ? "border-red-200/55 bg-red-400/14 text-red-50"
+          : "border-red-200/70 bg-red-400/18 text-red-50 shadow-[0_0_28px_rgba(248,113,113,0.14)]";
   const positionClass = cue.kind === "tier-up" ? "top-[30%] text-base sm:text-lg" : "top-[58%] text-sm";
 
   return (
@@ -1104,14 +1108,13 @@ function DropStartScreen({
   const currentRunLabel = formatPracticeNoteLabel(normalizedPractice);
 
   return (
-    <div className="drop-start-screen flex flex-1 items-center justify-center py-8">
+    <div className="drop-start-screen flex min-h-0 flex-1 items-center justify-center py-8">
       <div className="drop-start-panel w-full max-w-3xl text-center">
-        <p className="drop-start-eyebrow text-xs font-black uppercase tracking-[0.42em] text-cyan-200/75">60 second recall run</p>
-        <h1 className="drop-start-title mt-4 text-5xl font-black tracking-tight text-white sm:text-7xl">Fretboard Drop</h1>
+        <h1 className="drop-start-title text-5xl font-black tracking-tight text-white sm:text-7xl">Fretboard Drop</h1>
         {import.meta.env.DEV ? (
           <p className="drop-dev-note mt-2 text-xs font-semibold text-slate-500">{DEV_BUILD_NOTE}</p>
         ) : null}
-        <p className="drop-start-subtitle mx-auto mt-4 max-w-lg text-lg font-semibold leading-relaxed text-slate-200">
+        <p className="drop-start-subtitle mx-auto mt-3 text-sm font-semibold text-slate-200 sm:text-base">
           Read the note, find it on the fretboard, and answer before the pick reaches the line.
         </p>
         <StringPracticeSelector value={stringSelection} onChange={onStringSelectionChange} />
@@ -1156,11 +1159,10 @@ function DropStartScreen({
             type="button"
             onClick={() => onNoteSoundChange(!noteSoundEnabled)}
             aria-pressed={noteSoundEnabled}
-            className={`drop-sound-toggle inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-black transition ${
-              noteSoundEnabled
+            className={`drop-sound-toggle inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-black transition ${noteSoundEnabled
                 ? "border-amber-100/70 bg-amber-300/16 text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.12)]"
                 : "border-slate-700/80 bg-slate-950/40 text-slate-300 hover:border-amber-100/45 hover:text-amber-100"
-            }`}
+              }`}
           >
             <Volume2 className="h-4 w-4" />
             Sound {noteSoundEnabled ? "On" : "Off"}
@@ -1219,9 +1221,8 @@ function StartFretboardPreview({
         return (
           <div
             key={stringIndex}
-            className={`relative grid min-h-8 grid-cols-[4rem_repeat(12,minmax(0,1fr))] items-center overflow-hidden transition-opacity sm:min-h-9 ${
-              showNotes && !isSelected ? "opacity-60" : ""
-            }`}
+            className={`relative grid min-h-8 grid-cols-[4rem_repeat(12,minmax(0,1fr))] items-center overflow-hidden transition-opacity sm:min-h-9 ${showNotes && !isSelected ? "opacity-60" : ""
+              }`}
             aria-label={`Quick peek ${getStringFocusLabel(stringIndex)} row`}
             data-testid={`quick-peek-row-${stringIndex}`}
           >
@@ -1243,9 +1244,8 @@ function StartFretboardPreview({
               return (
                 <div
                   key={fret}
-                  className={`relative z-10 flex h-full min-h-8 items-center justify-center border-l border-amber-100/14 font-mono text-[10px] font-black sm:text-xs ${
-                    fret === 0 ? "border-r-4 border-r-amber-100/60 bg-slate-950/24" : ""
-                  } ${isSelected ? "text-amber-50" : "text-transparent"}`}
+                  className={`relative z-10 flex h-full min-h-8 items-center justify-center border-l border-amber-100/14 font-mono text-[10px] font-black sm:text-xs ${fret === 0 ? "border-r-4 border-r-amber-100/60 bg-slate-950/24" : ""
+                    } ${isSelected ? "text-amber-50" : "text-transparent"}`}
                   aria-label={showNotes && isSelected && !isPlayableNote ? `${getStringFocusLabel(stringIndex)} fret ${fret} inactive note` : undefined}
                 >
                   <span
@@ -1439,7 +1439,6 @@ function StringPracticeSelector({
   return (
     <div className="drop-string-selector mx-auto mt-5 max-w-2xl">
       <p className="drop-string-selector-heading text-xs font-black uppercase tracking-[0.24em] text-cyan-100/70">Practice Strings</p>
-      <p className="drop-string-summary mt-1.5 text-xs font-semibold text-slate-300">Selected: {getStringSelectionLabel(selected)}</p>
       <div className="drop-string-grid mt-2 flex flex-wrap justify-center gap-1.5">
         {DROP_STRING_FOCUS_OPTIONS.map((option) => {
           const isSelected = selected.includes(option.value);
@@ -1449,11 +1448,10 @@ function StringPracticeSelector({
               type="button"
               onClick={() => toggleString(option.value)}
               aria-pressed={isSelected}
-              className={`drop-string-button min-h-8 min-w-14 rounded-md border px-2.5 text-xs font-black transition ${
-                isSelected
+              className={`drop-string-button min-h-8 min-w-14 rounded-md border px-2.5 text-xs font-black transition ${isSelected
                   ? "border-cyan-100 bg-cyan-200 text-slate-950 shadow-[0_0_22px_rgba(103,232,249,0.28)]"
                   : "border-slate-700/80 bg-slate-950/60 text-slate-200 hover:border-cyan-200/70 hover:text-cyan-100"
-              }`}
+                }`}
             >
               {option.label}
             </button>
@@ -1463,11 +1461,10 @@ function StringPracticeSelector({
           type="button"
           onClick={() => onChange(ALL_DROP_STRING_INDEXES)}
           aria-pressed={allSelected}
-          className={`drop-string-button min-h-8 min-w-14 rounded-md border px-2.5 text-xs font-black transition ${
-            allSelected
+          className={`drop-string-button min-h-8 min-w-14 rounded-md border px-2.5 text-xs font-black transition ${allSelected
               ? "border-cyan-100 bg-cyan-200 text-slate-950 shadow-[0_0_22px_rgba(103,232,249,0.28)]"
               : "border-slate-700/80 bg-slate-950/60 text-slate-200 hover:border-cyan-200/70 hover:text-cyan-100"
-          }`}
+            }`}
         >
           All
         </button>
@@ -1509,7 +1506,6 @@ function NoteFocusSelector({
   return (
     <div className="drop-note-focus mx-auto mt-5 max-w-2xl text-sm">
       <p className="drop-note-focus-heading font-semibold text-slate-300">Practice notes:</p>
-      <p className="drop-note-focus-summary mt-1 text-xs font-semibold text-amber-100/70">{formatPracticeNoteLabel(normalized)}</p>
       <div className="drop-note-focus-grid mt-2 flex flex-wrap items-center justify-center gap-1.5">
         {CURRENT_DROP_NOTE_POOL.notes.map((note) => {
           const isSelected = selectedNotes.includes(note);
@@ -1520,11 +1516,10 @@ function NoteFocusSelector({
               onClick={() => toggleNote(note)}
               aria-pressed={isSelected}
               aria-label={`Practice note ${note}`}
-              className={`drop-note-button min-h-9 min-w-10 rounded-md border px-3 text-sm font-black transition ${
-                isSelected
+              className={`drop-note-button min-h-9 min-w-10 rounded-md border px-3 text-sm font-black transition ${isSelected
                   ? "border-amber-100 bg-amber-200 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.2)]"
                   : "border-slate-700/80 bg-slate-950/60 text-slate-300 hover:border-amber-100/60 hover:text-amber-100"
-              }`}
+                }`}
             >
               {note}
             </button>
@@ -1535,11 +1530,10 @@ function NoteFocusSelector({
           onClick={() => commitNotes(CURRENT_DROP_NOTE_POOL.notes)}
           aria-pressed={allNotesSelected}
           aria-label="All practice notes"
-          className={`drop-note-button min-h-9 min-w-12 rounded-md border px-3 text-sm font-black transition ${
-            allNotesSelected
+          className={`drop-note-button min-h-9 min-w-12 rounded-md border px-3 text-sm font-black transition ${allNotesSelected
               ? "border-amber-100 bg-amber-200 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.2)]"
               : "border-slate-700/80 bg-slate-950/60 text-slate-300 hover:border-amber-100/60 hover:text-amber-100"
-          }`}
+            }`}
         >
           All
         </button>
@@ -1567,11 +1561,10 @@ function SpeedModeSelector({
               type="button"
               onClick={() => onChange(config.id)}
               aria-pressed={isSelected}
-              className={`drop-speed-button min-h-20 rounded-lg border px-3 py-2 text-left transition ${
-                isSelected
+              className={`drop-speed-button min-h-20 rounded-lg border px-3 py-2 text-left transition ${isSelected
                   ? "border-amber-100 bg-amber-200 text-slate-950 shadow-[0_0_22px_rgba(251,191,36,0.22)]"
                   : "border-slate-700/80 bg-slate-950/60 text-slate-200 hover:border-amber-100/55 hover:text-amber-100"
-              }`}
+                }`}
             >
               <span className="block text-sm font-black">{config.label}</span>
               <span className={`mt-1 block text-xs font-semibold leading-snug ${isSelected ? "text-slate-800" : "text-slate-400"}`}>
@@ -1637,11 +1630,10 @@ function NotePrompt({
       data-final-second={isFinalSecond ? "true" : "false"}
     >
       <div
-        className={`relative flex items-center justify-center ${
-          isActive
+        className={`relative flex items-center justify-center ${isActive
             ? "drop-shadow-[0_0_28px_rgba(252,211,77,0.55)]"
             : "drop-shadow-[0_0_14px_rgba(103,232,249,0.14)]"
-        }`}
+          }`}
         style={{
           filter: isActive
             ? `drop-shadow(0 0 24px rgba(252,211,77,0.55)) drop-shadow(0 0 10px ${accent.glowColor})`
@@ -1698,9 +1690,8 @@ function NotePrompt({
           />
         </svg>
         <span
-          className={`relative z-10 font-black leading-none ${
-            isActive ? "text-slate-950 drop-shadow-[0_2px_0_rgba(255,255,255,0.42)]" : "text-slate-100"
-          }`}
+          className={`relative z-10 font-black leading-none ${isActive ? "text-slate-950 drop-shadow-[0_2px_0_rgba(255,255,255,0.42)]" : "text-slate-100"
+            }`}
           style={{
             fontSize: Math.round(gemSizePx * 0.52),
             WebkitTextStroke: isActive ? "1px rgba(255,251,235,0.32)" : "1px rgba(224,242,254,0.28)",
@@ -1710,9 +1701,8 @@ function NotePrompt({
         </span>
       </div>
       <div
-        className={`mt-2 h-1.5 overflow-hidden rounded-full border ${
-          isActive ? "border-amber-100/35 bg-slate-900/70" : "border-cyan-100/20 bg-slate-900/55"
-        }`}
+        className={`mt-2 h-1.5 overflow-hidden rounded-full border ${isActive ? "border-amber-100/35 bg-slate-900/70" : "border-cyan-100/20 bg-slate-900/55"
+          }`}
         style={{ width: barWidthPx }}
         aria-hidden="true"
       >
@@ -1774,9 +1764,8 @@ function DropGameFretboard({
                 />
               ) : null}
               <div
-                className={`relative z-10 pr-2 text-right text-xs font-black tabular-nums ${
-                  isActiveTargetString ? "text-white" : isSelectedInactiveString ? "text-cyan-100/70" : "text-amber-100/34"
-                }`}
+                className={`relative z-10 pr-2 text-right text-xs font-black tabular-nums ${isActiveTargetString ? "text-white" : isSelectedInactiveString ? "text-cyan-100/70" : "text-amber-100/34"
+                  }`}
               >
                 {stringIndex + 1}
               </div>
@@ -1789,11 +1778,10 @@ function DropGameFretboard({
                     key={fret}
                     type="button"
                     onClick={() => onFretClick(stringIndex, fret)}
-                    className={`drop-fretboard-cell relative z-10 h-full min-h-8 outline-none transition hover:bg-amber-200/12 focus-visible:bg-cyan-300/15 focus-visible:ring-2 focus-visible:ring-cyan-200 sm:min-h-9 ${
-                      isOpen
+                    className={`drop-fretboard-cell relative z-10 h-full min-h-8 outline-none transition hover:bg-amber-200/12 focus-visible:bg-cyan-300/15 focus-visible:ring-2 focus-visible:ring-cyan-200 sm:min-h-9 ${isOpen
                         ? "border-r-4 border-r-amber-100/85 bg-slate-950/26"
                         : "border-l border-amber-100/18"
-                    }`}
+                      }`}
                     style={{
                       backgroundColor: isActiveTargetString ? "rgba(255,255,255,0.018)" : undefined,
                     }}
@@ -1849,11 +1837,10 @@ function FretFeedback({ feedback }: { feedback: DropFeedback }) {
   const isCorrect = feedback.kind === "correct";
   return (
     <span
-      className={`pointer-events-none absolute left-1/2 top-1/2 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg ${
-        isCorrect
+      className={`pointer-events-none absolute left-1/2 top-1/2 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg ${isCorrect
           ? "border-amber-50 bg-amber-300 text-slate-950 shadow-amber-300/55"
           : "border-red-100/80 bg-red-400/85 text-red-50 shadow-red-400/24"
-      }`}
+        }`}
     >
       {isCorrect ? (
         <span className="absolute inset-[-7px] rounded-full border border-amber-100/60 bg-amber-200/10 animate-ping" />

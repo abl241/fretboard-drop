@@ -103,9 +103,7 @@ describe("FretboardDropGame", () => {
 
     expect(screen.getByText("Read the note, find it on the fretboard, and answer before the pick reaches the line.")).toBeInTheDocument();
     expect(screen.getByText("Practice Strings")).toBeInTheDocument();
-    expect(screen.getByText("Selected: high E")).toBeInTheDocument();
     expect(screen.getByText("Practice notes:")).toBeInTheDocument();
-    expect(screen.getByText("all notes")).toBeInTheDocument();
     expect(screen.getByText("Pick Speed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Warm-Up/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Practice Tempo/ })).toHaveAttribute("aria-pressed", "false");
@@ -337,8 +335,9 @@ describe("FretboardDropGame", () => {
 
     fireEvent.click(getStringButton("B"));
     selectAOnly();
-    expect(screen.getByText("Selected: high E + B")).toBeInTheDocument();
-    expect(screen.getByText("A only")).toBeInTheDocument();
+    expect(getStringButton("B")).toHaveAttribute("aria-pressed", "true");
+    expect(getPracticeNoteButton("A")).toHaveAttribute("aria-pressed", "true");
+    expect(getPracticeNoteButton("C")).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(screen.getByRole("button", { name: "Stats" }));
     expect(await screen.findByRole("heading", { name: "Your Fretboard" })).toBeInTheDocument();
@@ -355,8 +354,9 @@ describe("FretboardDropGame", () => {
     expect(screen.getByRole("button", { name: "All strings" })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByText("Selected: high E + B")).toBeInTheDocument();
-    expect(screen.getByText("A only")).toBeInTheDocument();
+    expect(getStringButton("B")).toHaveAttribute("aria-pressed", "true");
+    expect(getPracticeNoteButton("A")).toHaveAttribute("aria-pressed", "true");
+    expect(getPracticeNoteButton("C")).toHaveAttribute("aria-pressed", "false");
   });
 
   it("keeps 2D Stats as default and preserves state when toggling 3D Explore", async () => {
@@ -555,13 +555,12 @@ describe("FretboardDropGame", () => {
 
     expect(screen.getByRole("button", { name: "high E" })).toHaveAttribute("aria-pressed", "true");
     expect(getStringButton("B")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Selected: high E + B")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "high E" }));
     fireEvent.click(getStringButton("B"));
 
     expect(getStringButton("B")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Selected: B")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "high E" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("updates the displayed best for the selected strings", () => {
@@ -585,8 +584,9 @@ describe("FretboardDropGame", () => {
     togglePracticeNote("A");
     togglePracticeNote("B");
 
-    expect(screen.getByText("C,D,E")).toBeInTheDocument();
     expect(getPracticeNoteButton("C")).toHaveAttribute("aria-pressed", "true");
+    expect(getPracticeNoteButton("D")).toHaveAttribute("aria-pressed", "true");
+    expect(getPracticeNoteButton("E")).toHaveAttribute("aria-pressed", "true");
     expect(getPracticeNoteButton("F")).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "All practice notes" })).toHaveAttribute("aria-pressed", "false");
 
@@ -595,7 +595,8 @@ describe("FretboardDropGame", () => {
     togglePracticeNote("C");
 
     expect(getPracticeNoteButton("C")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("C only")).toBeInTheDocument();
+    expect(getPracticeNoteButton("D")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("high E · C only best 0")).toBeInTheDocument();
   });
 
   it("toggles Quick Peek notes for selected strings only", () => {
@@ -674,7 +675,6 @@ describe("FretboardDropGame", () => {
 
     fireEvent.click(getStringButton("B"));
 
-    expect(screen.getByText("Selected: high E + B")).toBeInTheDocument();
     expect(within(screen.getByTestId("quick-peek-row-1")).getAllByText("B").length).toBeGreaterThan(0);
   });
 

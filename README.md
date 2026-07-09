@@ -7,7 +7,7 @@ This is a frontend-only MVP:
 - Progress is local only, using `localStorage` for personal best score.
 - There is no backend, auth, database, leaderboard, billing, microphone input, or audio detection.
 - The app opens directly into Fretboard Drop and does not depend on the GuitarRise Learn Fretboard page.
-- Future standalone work should stay inside `artifacts/fretboard-drop` until the app is ready to become a separate repo.
+- This repo is the standalone Fretboard Drop app.
 
 ## Product principles
 
@@ -42,7 +42,8 @@ Future polish notes, roadmap decisions, design guardrails, and later mode ideas 
 
 ## Scripts
 
-- `pnpm --filter @workspace/fretboard-drop dev`
-- `pnpm --filter @workspace/fretboard-drop build`
-- `pnpm --filter @workspace/fretboard-drop typecheck`
-- `pnpm --filter @workspace/fretboard-drop test`
+- `pnpm dev`
+- `pnpm build`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm ios:open`

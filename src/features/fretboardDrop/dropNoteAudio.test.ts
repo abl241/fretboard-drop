@@ -8,11 +8,14 @@ import {
   playFretboardNote,
   playWrongBuzz,
   readNoteSoundEnabled,
+  resetDropNoteAudioForTests,
+  unlockNoteAudio,
   writeNoteSoundEnabled,
 } from "./dropNoteAudio";
 
 describe("Fretboard Drop note audio", () => {
   afterEach(() => {
+    resetDropNoteAudioForTests();
     vi.restoreAllMocks();
     window.localStorage.clear();
   });
@@ -59,7 +62,27 @@ describe("Fretboard Drop note audio", () => {
     expect(Math.abs(pluck[pluck.length - 1])).toBeLessThan(0.2);
   });
 
-  it("plays correct and wrong sounds without throwing when Web Audio is available", () => {
+  it("resumes a suspended audio context before playback", async () => {
+    const resume = vi.fn(async function (this: { state: AudioContextState }) {
+      this.state = "running";
+    });
+    vi.stubGlobal("AudioContext", vi.fn(() => ({
+      currentTime: 0,
+      sampleRate: 44_100,
+      state: "suspended" as AudioContextState,
+      destination: {},
+      resume,
+      createBufferSource: vi.fn(),
+      createGain: vi.fn(),
+      createBiquadFilter: vi.fn(),
+      createBuffer: vi.fn(),
+    })));
+
+    await expect(unlockNoteAudio()).resolves.toBe(true);
+    expect(resume).toHaveBeenCalled();
+  });
+
+  it("plays correct and wrong sounds without throwing when Web Audio is available", async () => {
     const bufferSources: Array<{ stop: ReturnType<typeof vi.fn> }> = [];
     const createBufferSource = vi.fn(() => {
       const source = {
@@ -112,8 +135,10 @@ describe("Fretboard Drop note audio", () => {
       createBuffer,
     })));
 
-    expect(() => playFretboardNote({ stringIndex: 0, fret: 5 })).not.toThrow();
-    expect(() => playWrongBuzz()).not.toThrow();
+    playFretboardNote({ stringIndex: 0, fret: 5 });
+    playWrongBuzz();
+    await Promise.resolve();
+
     expect(createBufferSource).toHaveBeenCalled();
     expect(bufferSources.length).toBeGreaterThanOrEqual(2);
     expect(createOscillator).toHaveBeenCalled();
