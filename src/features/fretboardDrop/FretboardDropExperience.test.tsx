@@ -10,7 +10,7 @@ import { createGuidedTargetSequence } from "./guided/guidedTargetGeneration";
 import { getGuidedStepById } from "./guided/guidedSteps";
 import { getGuidedTargetTestAttributes } from "./guided/GuidedLessonRunner";
 import { getStringFocusLabel } from "./dropGameUtils";
-import type { GuidedTarget } from "./guided/guidedTypes";
+import type { GuidedPreferredMode, GuidedTarget } from "./guided/guidedTypes";
 
 describe("FretboardDropExperience", () => {
   afterEach(() => {
@@ -25,13 +25,26 @@ describe("FretboardDropExperience", () => {
     expect(getInitialExperienceMode("name-the-note")).toBe("name-the-note");
   });
 
-  it("shows the first-visit mode choice", () => {
+  it("shows the home page with all learning modes", () => {
     render(<FretboardDropExperience />);
 
-    expect(screen.getByRole("heading", { name: "Learn the Fretboard" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose a mode" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Guided Learning" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fretboard Drop" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Name the Note" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Learning" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set Up a Run" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Play Name the Note" })).toBeInTheDocument();
+  });
+
+  it("returns to the home page from a mode", () => {
+    render(<FretboardDropExperience />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Up a Run" }));
+    expect(screen.getByRole("button", { name: "Start Run" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(screen.getByRole("heading", { name: "Choose a mode" })).toBeInTheDocument();
   });
 
   it("choosing Guided Learning saves the preference and opens orientation", () => {
@@ -69,13 +82,14 @@ describe("FretboardDropExperience", () => {
 
     expect(screen.getByRole("heading", { name: "Fretboard Drop" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Run" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try Name the Note" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try Name the Note" })).not.toBeInTheDocument();
   });
 
   it("shows orientation only until completed", () => {
     window.localStorage.setItem(GUIDED_PREFERRED_MODE_STORAGE_KEY, "guided");
     const { unmount } = render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     fireEvent.click(screen.getByRole("button", { name: "Start with A" }));
 
     expect(window.localStorage.getItem(GUIDED_ORIENTATION_SEEN_STORAGE_KEY)).toBe("true");
@@ -86,6 +100,7 @@ describe("FretboardDropExperience", () => {
     unmount();
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     expect(screen.getByText("Continue Level 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Learn A" })).toBeInTheDocument();
   });
@@ -102,6 +117,7 @@ describe("FretboardDropExperience", () => {
 
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     fireEvent.click(screen.getByRole("button", { name: "Start with A" }));
 
     expect(screen.getByRole("heading", { name: "Learn D" })).toBeInTheDocument();
@@ -121,6 +137,7 @@ describe("FretboardDropExperience", () => {
 
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     expect(screen.getByRole("heading", { name: "Learn B + C with help" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Switch to Free Play" }));
 
@@ -130,7 +147,8 @@ describe("FretboardDropExperience", () => {
       completedStepIds: ["a"],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Want help learning the fretboard? Try Guided Learning" }));
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Learning" }));
     expect(screen.getByRole("heading", { name: "Learn B + C with help" })).toBeInTheDocument();
   });
 
@@ -147,6 +165,7 @@ describe("FretboardDropExperience", () => {
     }));
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     fireEvent.click(screen.getByRole("button", { name: "Learn A" }));
 
     expect(screen.getByRole("heading", { name: "Find A" })).toBeInTheDocument();
@@ -200,6 +219,7 @@ describe("FretboardDropExperience", () => {
     }));
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     fireEvent.click(screen.getByRole("button", { name: "Learn A" }));
     advanceThroughGuidedPreview();
 
@@ -249,6 +269,7 @@ describe("FretboardDropExperience", () => {
     }));
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     fireEvent.click(screen.getByRole("button", { name: "Learn B + C with Help" }));
     advanceThroughGuidedPreview();
 
@@ -275,6 +296,7 @@ describe("FretboardDropExperience", () => {
     }));
     render(<FretboardDropExperience />);
 
+    enterModeFromHome("guided");
     fireEvent.click(screen.getByRole("button", { name: "Learn B + C with Help" }));
     advanceThroughGuidedPreview();
 
@@ -299,6 +321,20 @@ describe("FretboardDropExperience", () => {
     expect(screen.getByRole("heading", { name: "Find B + C" })).toBeInTheDocument();
   });
 });
+
+function enterModeFromHome(mode: GuidedPreferredMode) {
+  if (mode === "guided") {
+    fireEvent.click(screen.getByRole("button", { name: "Start Learning" }));
+    return;
+  }
+
+  if (mode === "free-play") {
+    fireEvent.click(screen.getByRole("button", { name: "Set Up a Run" }));
+    return;
+  }
+
+  fireEvent.click(screen.getByRole("button", { name: "Play Name the Note" }));
+}
 
 function advanceThroughGuidedPreview() {
   act(() => {

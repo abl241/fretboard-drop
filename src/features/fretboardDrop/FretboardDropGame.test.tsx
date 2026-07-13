@@ -250,6 +250,33 @@ describe("FretboardDropGame", () => {
     expect(getHorizontalDeadlinePick()).toHaveStyle({ width: "65px", height: "65px" });
   });
 
+  it("keeps setup and run details available behind a toggle in phone landscape", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: query.includes("orientation: landscape"),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+
+    render(<FretboardDropGame />);
+
+    expect(screen.getByRole("button", { name: "Show details" })).toBeInTheDocument();
+    expect(screen.queryByText(/New to these strings/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+    expect(screen.getByText(/New to these strings/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide details" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    expect(screen.queryByText("Combo")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show run details" }));
+    expect(screen.getByText("Combo")).toBeInTheDocument();
+    expect(screen.getByText("Best")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide run details" })).toBeInTheDocument();
+    expect(screen.getAllByText(/Focus:/).length).toBeGreaterThan(0);
+  });
+
   it("marks the horizontal stage reduced-motion fallback when requested", () => {
     vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
       matches: query === "(prefers-reduced-motion: reduce)",
@@ -298,9 +325,10 @@ describe("FretboardDropGame", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Stats" }));
 
-    const scoredCell = await screen.findByTestId("stats-cell-standard:0:5");
+    const scoredCell = await screen.findByRole("button", {
+      name: /A, high E, fret 5.*Fluency: \d+ Fluency/,
+    });
     expect(scoredCell).toHaveAccessibleName(/A, high E, fret 5/);
-    expect(scoredCell).toHaveAccessibleName(/Fluency: \d+ Fluency/);
 
     fireEvent.click(screen.getByRole("button", { name: "Accuracy" }));
 

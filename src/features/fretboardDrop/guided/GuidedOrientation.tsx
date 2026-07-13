@@ -1,9 +1,8 @@
 export function GuidedOrientation({
   onStart,
-  onSwitchToFreePlay,
 }: {
   onStart: () => void;
-  onSwitchToFreePlay: () => void;
+  onSwitchToFreePlay?: () => void;
 }) {
   return (
     <div className="guided-shell min-h-[calc(100vh-1px)] bg-[#080a0f] px-4 py-6 text-slate-50">
@@ -32,13 +31,6 @@ export function GuidedOrientation({
               className="inline-flex min-h-12 items-center justify-center rounded-lg bg-amber-300 px-7 text-base font-black text-slate-950 shadow-[0_0_30px_rgba(252,211,77,0.26)] transition hover:bg-amber-200"
             >
               Start with A
-            </button>
-            <button
-              type="button"
-              onClick={onSwitchToFreePlay}
-              className="text-sm font-black text-cyan-100/72 underline decoration-cyan-100/24 underline-offset-4 transition hover:text-cyan-50 hover:decoration-cyan-100/70"
-            >
-              Already know the fretboard? Try Free Play
             </button>
           </div>
         </section>

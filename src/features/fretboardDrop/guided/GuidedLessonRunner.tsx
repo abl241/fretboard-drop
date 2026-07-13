@@ -684,16 +684,15 @@ function GuidedFretboard({
     <div className="drop-fretboard overflow-hidden rounded-lg border border-cyan-200/20 bg-[#2d1d12] p-2 shadow-[0_-18px_52px_rgba(0,0,0,0.35)_inset,0_0_34px_rgba(14,165,233,0.08)]">
       <GuidedFretNumberRow frets={frets} />
       <GuidedPositionDotRow frets={frets} />
-      <div className="mt-1">
-        {strings.map((stringIndex) => {
+      {strings.map((stringIndex) => {
           const isActive = activeTarget?.stringIndex === stringIndex;
           const isCorrectionString = correction?.target.stringIndex === stringIndex;
           const accent = getStringAccent(stringIndex);
           return (
-            <div key={stringIndex} className="drop-fretboard-string-row relative grid min-h-8 grid-cols-[2rem_repeat(12,minmax(0,1fr))] items-center overflow-visible sm:min-h-9">
+            <div key={stringIndex} className="drop-fretboard-string-row relative min-h-8 items-center overflow-visible sm:min-h-9">
               {isActive ? (
                 <div
-                  className="pointer-events-none absolute left-8 right-0 top-1/2 z-0 h-5 -translate-y-1/2 rounded-full border-y border-white/8"
+                  className="drop-fretboard-active-rail pointer-events-none absolute top-1/2 right-0 z-0 h-5 -translate-y-1/2 rounded-full border-y border-white/8"
                   style={{
                     background: `linear-gradient(90deg, transparent, ${accent.softColor} 18%, ${accent.strongColor} 50%, ${accent.softColor} 82%, transparent)`,
                     boxShadow: `0 0 10px ${accent.glowColor}`,
@@ -765,7 +764,6 @@ function GuidedFretboard({
             </div>
           );
         })}
-      </div>
       <GuidedPositionDotRow frets={frets} />
       <GuidedFretNumberRow frets={frets} />
     </div>
@@ -923,7 +921,7 @@ function GuidedResultStat({ label, value }: { label: string; value: string | num
 
 function GuidedFretNumberRow({ frets }: { frets: number[] }) {
   return (
-    <div className="grid grid-cols-[2rem_repeat(12,minmax(0,1fr))] text-center font-mono text-[9px] font-bold text-amber-100/62">
+    <div className="drop-fretboard-header-row text-center font-mono text-[9px] font-bold text-amber-100/62">
       <div />
       {frets.map((fret) => (
         <div key={fret} className={fret === 0 ? "text-[8px] uppercase text-cyan-100/80" : ""}>
@@ -936,7 +934,7 @@ function GuidedFretNumberRow({ frets }: { frets: number[] }) {
 
 function GuidedPositionDotRow({ frets }: { frets: number[] }) {
   return (
-    <div className="grid h-4 grid-cols-[2rem_repeat(12,minmax(0,1fr))] items-center">
+    <div className="drop-fretboard-header-row h-4 items-center">
       <div />
       {frets.map((fret) => {
         const isDouble = DOUBLE_DOT_FRETS.includes(fret);

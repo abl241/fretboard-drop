@@ -24,6 +24,36 @@ button {
   font: inherit;
 }
 
+.drop-fretboard {
+  --drop-fretboard-label-width: 2rem;
+  display: grid;
+  grid-template-columns: var(--drop-fretboard-label-width) repeat(12, minmax(0, 1fr));
+  row-gap: 0.15rem;
+}
+
+.drop-fretboard-header-row,
+.drop-fretboard-string-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: var(--drop-fretboard-label-width) repeat(12, minmax(0, 1fr));
+}
+
+.drop-fretboard-active-rail {
+  left: var(--drop-fretboard-label-width);
+}
+
+.drop-fretboard-cell {
+  min-width: 0;
+}
+
+.experience-root {
+  min-height: 100dvh;
+}
+
+.experience-mode:not([hidden]) {
+  min-height: 100dvh;
+}
+
 .horizontal-deadline-stage {
   box-shadow:
     inset 0 0 32px rgba(14, 165, 233, 0.05),
@@ -206,8 +236,8 @@ button {
 
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 950px) {
   .horizontal-deadline-stage {
-    min-height: 4.75rem !important;
-    max-height: 24dvh !important;
+    min-height: 3.5rem !important;
+    max-height: 20dvh !important;
   }
 
   .horizontal-deadline-pick-note {
@@ -765,10 +795,17 @@ button {
 }
 
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 950px) {
-  html,
-  body {
+  .home-shell {
     height: 100dvh;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .experience-mode:not([hidden]) .drop-app-shell {
+    padding-top: calc(max(0.5rem, env(safe-area-inset-top)) + 2.75rem) !important;
   }
 
   .drop-app-shell {
@@ -781,8 +818,12 @@ button {
       max(0.75rem, env(safe-area-inset-bottom))
       max(1.25rem, env(safe-area-inset-left)) !important;
     overflow-x: hidden;
-    overflow-y: hidden;
     overscroll-behavior: contain;
+  }
+
+  .drop-app-shell:not(.drop-app-shell--scrollable) {
+    overflow-y: hidden;
+    touch-action: manipulation;
   }
 
   .drop-app-shell--scrollable {
@@ -817,7 +858,7 @@ button {
     margin-top: 0.3rem !important;
     font-size: 0.72rem !important;
     line-height: 1.2 !important;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .drop-string-selector {
@@ -887,7 +928,13 @@ button {
 
   .drop-start-helper,
   .drop-start-preview {
-    display: none !important;
+    margin-top: 0.35rem !important;
+  }
+
+  .drop-start-details-toggle {
+    min-height: 2rem !important;
+    padding-inline: 0.85rem !important;
+    font-size: 0.72rem !important;
   }
 
   .drop-start-current-run {
@@ -929,22 +976,32 @@ button {
   }
 
   .drop-game-run {
-    height: calc(100dvh - 0.5rem);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
     gap: 0.12rem !important;
   }
 
   .drop-game-hud {
     gap: 0.2rem !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .drop-game-hud > div {
+    gap: 0.2rem !important;
     padding: 0.18rem !important;
     border-radius: 0.45rem !important;
   }
 
-  .drop-game-hud > :nth-child(4) {
-    display: none !important;
+  .drop-game-hud-details {
+    gap: 0.35rem !important;
   }
 
   .drop-game-hud button,
-  .drop-game-hud > div {
+  .drop-game-hud > div > div {
     min-height: 1.95rem !important;
   }
 
@@ -959,7 +1016,7 @@ button {
     height: 1rem !important;
   }
 
-  .drop-game-hud > div {
+  .drop-game-hud > div > div {
     padding-inline: 0.4rem !important;
     border-radius: 0.45rem !important;
   }
@@ -973,49 +1030,52 @@ button {
   }
 
   .drop-game-field {
-    grid-template-rows: minmax(4.75rem, 0.22fr) minmax(0, 1fr) !important;
-    gap: 0.35rem !important;
+    grid-template-rows: minmax(3.5rem, 0.2fr) minmax(0, 1fr) !important;
+    gap: 0.25rem !important;
+    min-height: 0;
   }
 
   .drop-stage {
-    min-height: clamp(4.75rem, 22dvh, 6.5rem) !important;
-    max-height: 24dvh !important;
+    min-height: clamp(3.5rem, 18dvh, 5.5rem) !important;
+    max-height: 20dvh !important;
     border-radius: 0.45rem !important;
   }
 
   .drop-fretboard-wrap {
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .drop-fretboard {
+    --drop-fretboard-label-width: 1.6rem;
     padding: 0.2rem !important;
     border-radius: 0.45rem !important;
+    row-gap: 0.05rem;
   }
 
   .drop-fretboard-string-row {
-    grid-template-columns: 1.6rem repeat(12, minmax(0, 1fr)) !important;
-    min-height: 1.45rem !important;
+    min-height: 1.35rem !important;
   }
 
   .drop-fretboard-cell {
-    min-height: 1.45rem !important;
+    min-height: 1.35rem !important;
   }
 
-  .drop-fretboard .grid:first-child,
-  .drop-fretboard .grid:last-child {
+  .drop-fretboard-header-row {
     font-size: 0.48rem !important;
     line-height: 1 !important;
   }
 
-  .drop-fretboard .grid:first-child {
+  .drop-fretboard-header-row:first-child {
     height: 0.58rem !important;
   }
 
-  .drop-fretboard .grid:nth-child(2) {
+  .drop-fretboard-header-row:nth-child(2) {
     height: 0.48rem !important;
   }
 
-  .drop-fretboard .grid:nth-child(2) span {
+  .drop-fretboard-header-row:nth-child(2) span {
     width: 0.32rem !important;
     height: 0.32rem !important;
   }

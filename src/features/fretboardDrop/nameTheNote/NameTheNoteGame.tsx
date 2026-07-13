@@ -428,10 +428,8 @@ function getNameTheNoteResult(state: NameTheNoteState): NameTheNoteResult {
 
 export function NameTheNoteGame({
   onBackToFreePlay,
-  onSwitchToGuided,
 }: {
   onBackToFreePlay?: () => void;
-  onSwitchToGuided?: () => void;
 }) {
   const [settings, setSettings] = useState<NameTheNoteSettings>(DEFAULT_NAME_THE_NOTE_SETTINGS);
   const [bestScore, setBestScore] = useState(readNameTheNoteBestScore);
@@ -510,7 +508,6 @@ export function NameTheNoteGame({
               onSettingsChange={setSettings}
               onStart={startRun}
               onBackToFreePlay={onBackToFreePlay}
-              onSwitchToGuided={onSwitchToGuided}
             />
           ) : state.status === "complete" && result ? (
             <NameTheNoteResults
@@ -540,7 +537,6 @@ function NameTheNoteStartScreen({
   onSettingsChange,
   onStart,
   onBackToFreePlay,
-  onSwitchToGuided,
 }: {
   bestScore: number;
   settings: NameTheNoteSettings;
@@ -548,7 +544,6 @@ function NameTheNoteStartScreen({
   onSettingsChange: (settings: NameTheNoteSettings) => void;
   onStart: () => void;
   onBackToFreePlay?: () => void;
-  onSwitchToGuided?: () => void;
 }) {
   return (
     <div className="flex flex-1 items-center justify-center py-8">
@@ -600,15 +595,6 @@ function NameTheNoteStartScreen({
             </button>
           ) : null}
         </div>
-        {onSwitchToGuided ? (
-          <button
-            type="button"
-            onClick={onSwitchToGuided}
-            className="mt-5 text-sm font-black text-cyan-100/74 underline decoration-cyan-100/24 underline-offset-4 transition hover:text-cyan-50 hover:decoration-cyan-100/70"
-          >
-            Want help learning the fretboard? Try Guided Learning
-          </button>
-        ) : null}
       </div>
     </div>
   );

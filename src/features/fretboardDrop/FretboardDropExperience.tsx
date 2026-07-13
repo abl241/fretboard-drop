@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { FretboardDropGame } from "./FretboardDropGame";
+import { ExperienceHeader } from "./ExperienceHeader";
+import { LearningModesHome } from "./LearningModesHome";
 import { NameTheNoteGame } from "./nameTheNote/NameTheNoteGame";
 import {
   GuidedLearningPath,
-  GuidedModeChoice,
   readGuidedPreferredMode,
   writeGuidedPreferredMode,
   type GuidedPreferredMode,
 } from "./guided";
 
 export const IS_GUIDED_LEARNING_AVAILABLE = true;
+
+export type ExperienceScreen = "home" | GuidedPreferredMode;
 
 export function getInitialExperienceMode(
   storedMode: GuidedPreferredMode | null,
@@ -18,10 +21,15 @@ export function getInitialExperienceMode(
 }
 
 export function FretboardDropExperience() {
-  const [preferredMode, setPreferredMode] = useState<GuidedPreferredMode | null>(() => getInitialExperienceMode(readGuidedPreferredMode()));
-  const [hasOpenedGuided, setHasOpenedGuided] = useState(() => preferredMode === "guided");
-  const [hasOpenedFreePlay, setHasOpenedFreePlay] = useState(() => preferredMode === "free-play");
-  const [hasOpenedNameTheNote, setHasOpenedNameTheNote] = useState(() => preferredMode === "name-the-note");
+  const storedMode = readGuidedPreferredMode();
+  const [screen, setScreen] = useState<ExperienceScreen>("home");
+  const [hasOpenedGuided, setHasOpenedGuided] = useState(() => storedMode === "guided");
+  const [hasOpenedFreePlay, setHasOpenedFreePlay] = useState(() => storedMode === "free-play");
+  const [hasOpenedNameTheNote, setHasOpenedNameTheNote] = useState(() => storedMode === "name-the-note");
+
+  function goHome() {
+    setScreen("home");
+  }
 
   function chooseMode(mode: GuidedPreferredMode) {
     writeGuidedPreferredMode(mode);
@@ -32,12 +40,13 @@ export function FretboardDropExperience() {
     } else {
       setHasOpenedNameTheNote(true);
     }
-    setPreferredMode(mode);
+    setScreen(mode);
   }
 
-  if (preferredMode === null) {
+  if (screen === "home") {
     return (
-      <GuidedModeChoice
+      <LearningModesHome
+        lastPlayedMode={storedMode}
         onChooseGuided={() => chooseMode("guided")}
         onChooseFreePlay={() => chooseMode("free-play")}
         onChooseNameTheNote={() => chooseMode("name-the-note")}
@@ -50,28 +59,25 @@ export function FretboardDropExperience() {
   }
 
   return (
-    <>
+    <div className="experience-root">
+      <ExperienceHeader onBackToHome={goHome} />
       {hasOpenedGuided ? (
-        <div hidden={preferredMode !== "guided"}>
+        <div className="experience-mode" hidden={screen !== "guided"}>
           <GuidedLearningPath onSwitchToFreePlay={() => chooseMode("free-play")} />
         </div>
       ) : null}
       {hasOpenedFreePlay ? (
-        <div hidden={preferredMode !== "free-play"}>
-          <FretboardDropGame
-            onSwitchToGuided={() => chooseMode("guided")}
-            onSwitchToNameTheNote={() => chooseMode("name-the-note")}
-          />
+        <div className="experience-mode" hidden={screen !== "free-play"}>
+          <FretboardDropGame />
         </div>
       ) : null}
       {hasOpenedNameTheNote ? (
-        <div hidden={preferredMode !== "name-the-note"}>
+        <div className="experience-mode" hidden={screen !== "name-the-note"}>
           <NameTheNoteGame
             onBackToFreePlay={() => chooseMode("free-play")}
-            onSwitchToGuided={() => chooseMode("guided")}
           />
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

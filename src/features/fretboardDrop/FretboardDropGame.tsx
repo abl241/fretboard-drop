@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, RotateCcw, Timer, Trophy, Volume2, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, Info, RotateCcw, Timer, Trophy, Volume2, X, Zap } from "lucide-react";
 import { DOT_FRETS, DOUBLE_DOT_FRETS, OPEN_STRING_NOTES, getNoteAtFret, type Note } from "@/lib/fretboard";
 import type {
   DropFeedback,
@@ -432,12 +432,8 @@ function createRunHistoryEntry({
 }
 
 export function FretboardDropGame({
-  onSwitchToGuided,
-  onSwitchToNameTheNote,
   useHorizontalDeadlineStage = USE_HORIZONTAL_DEADLINE_STAGE,
 }: {
-  onSwitchToGuided?: () => void;
-  onSwitchToNameTheNote?: () => void;
   useHorizontalDeadlineStage?: boolean;
 } = {}) {
   const [practiceContext, setPracticeContext] = useState<DropPracticeContext>(DEFAULT_DROP_PRACTICE_CONTEXT);
@@ -848,8 +844,6 @@ export function FretboardDropGame({
               onStringSelectionChange={handleStringSelectionChange}
               onSpeedModeChange={handleSpeedModeChange}
               onOpenStats={() => setShowStats(true)}
-              onSwitchToGuided={onSwitchToGuided}
-              onSwitchToNameTheNote={onSwitchToNameTheNote}
             />
           ) : state.status === "complete" && result ? (
             <DropGameResults
@@ -945,26 +939,31 @@ export function FretboardDropGame({
   );
 }
 
-function useDropPromptSizePx(): number {
-  const getPromptSize = () => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return DROP_PROMPT_SIZE_PX;
-    return window.matchMedia(PHONE_LANDSCAPE_MEDIA_QUERY).matches ? DROP_PROMPT_COMPACT_SIZE_PX : DROP_PROMPT_SIZE_PX;
+function usePhoneLandscape(): boolean {
+  const getMatches = () => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia(PHONE_LANDSCAPE_MEDIA_QUERY).matches;
   };
-  const [promptSizePx, setPromptSizePx] = useState(getPromptSize);
+  const [isPhoneLandscape, setIsPhoneLandscape] = useState(getMatches);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
     const mediaQuery = window.matchMedia(PHONE_LANDSCAPE_MEDIA_QUERY);
-    const updatePromptSize = () => {
-      setPromptSizePx(mediaQuery.matches ? DROP_PROMPT_COMPACT_SIZE_PX : DROP_PROMPT_SIZE_PX);
+    const update = () => {
+      setIsPhoneLandscape(mediaQuery.matches);
     };
 
-    updatePromptSize();
-    mediaQuery.addEventListener("change", updatePromptSize);
-    return () => mediaQuery.removeEventListener("change", updatePromptSize);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
   }, []);
 
-  return promptSizePx;
+  return isPhoneLandscape;
+}
+
+function useDropPromptSizePx(): number {
+  const isPhoneLandscape = usePhoneLandscape();
+  return isPhoneLandscape ? DROP_PROMPT_COMPACT_SIZE_PX : DROP_PROMPT_SIZE_PX;
 }
 
 function DropStage({
@@ -1084,8 +1083,6 @@ function DropStartScreen({
   onStringSelectionChange,
   onSpeedModeChange,
   onOpenStats,
-  onSwitchToGuided,
-  onSwitchToNameTheNote,
 }: {
   bestScore: number;
   stringSelection: DropStringSelection;
@@ -1100,12 +1097,20 @@ function DropStartScreen({
   onStringSelectionChange: (stringSelection: DropStringSelection) => void;
   onSpeedModeChange: (speedMode: DropSpeedMode) => void;
   onOpenStats: () => void;
-  onSwitchToGuided?: () => void;
-  onSwitchToNameTheNote?: () => void;
 }) {
   const practiceLabel = getPracticeLabel(stringSelection, practiceContext);
   const normalizedPractice = normalizePracticeContext(practiceContext);
   const currentRunLabel = formatPracticeNoteLabel(normalizedPractice);
+  const isPhoneLandscape = usePhoneLandscape();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const showSetupDetails = !isPhoneLandscape || detailsOpen;
+
+  function handleQuickPeekToggle() {
+    if (isPhoneLandscape && !showQuickPeekNotes) {
+      setDetailsOpen(true);
+    }
+    onQuickPeekToggle();
+  }
 
   return (
     <div className="drop-start-screen flex min-h-0 flex-1 items-center justify-center py-8">
@@ -1120,13 +1125,28 @@ function DropStartScreen({
         <StringPracticeSelector value={stringSelection} onChange={onStringSelectionChange} />
         <NoteFocusSelector value={practiceContext} onChange={onPracticeContextChange} />
         <SpeedModeSelector value={speedMode} onChange={onSpeedModeChange} />
-        <p className="drop-start-helper mt-4 text-sm font-semibold text-slate-400">
-          {showQuickPeekNotes ? "Notes hide when the run starts." : "New to these strings? Peek at the notes, then start from memory."}
-        </p>
-        {showQuickPeekNotes ? (
-          <p className="drop-start-current-run mt-2 text-sm font-semibold text-amber-100/72">Current run: {currentRunLabel}</p>
+        {isPhoneLandscape ? (
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((isOpen) => !isOpen)}
+            aria-expanded={detailsOpen}
+            className="drop-start-details-toggle mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-cyan-200/30 px-4 text-sm font-black text-cyan-100 transition hover:border-cyan-100/70 hover:bg-cyan-200/10"
+          >
+            <Info className="h-4 w-4" />
+            {detailsOpen ? "Hide details" : "Show details"}
+          </button>
         ) : null}
-        <StartFretboardPreview stringSelection={stringSelection} practiceContext={practiceContext} showNotes={showQuickPeekNotes} />
+        {showSetupDetails ? (
+          <>
+            <p className="drop-start-helper mt-4 text-sm font-semibold text-slate-400">
+              {showQuickPeekNotes ? "Notes hide when the run starts." : "New to these strings? Peek at the notes, then start from memory."}
+            </p>
+            {showQuickPeekNotes ? (
+              <p className="drop-start-current-run mt-2 text-sm font-semibold text-amber-100/72">Current run: {currentRunLabel}</p>
+            ) : null}
+            <StartFretboardPreview stringSelection={stringSelection} practiceContext={practiceContext} showNotes={showQuickPeekNotes} />
+          </>
+        ) : null}
         <div className="drop-start-meta mt-7 flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-slate-300">
           <span className="rounded-full border border-slate-700/80 px-4 py-2">3 lives</span>
           <span className="rounded-full border border-slate-700/80 px-4 py-2">frets 0-11</span>
@@ -1143,7 +1163,7 @@ function DropStartScreen({
           </button>
           <button
             type="button"
-            onClick={onQuickPeekToggle}
+            onClick={handleQuickPeekToggle}
             className="drop-start-secondary inline-flex min-h-12 items-center justify-center rounded-lg border border-cyan-200/30 px-5 text-sm font-black text-cyan-100 transition hover:border-cyan-100/70 hover:bg-cyan-200/10"
           >
             {showQuickPeekNotes ? "Hide Notes" : "Quick Peek Notes"}
@@ -1168,24 +1188,6 @@ function DropStartScreen({
             Sound {noteSoundEnabled ? "On" : "Off"}
           </button>
         </div>
-        {onSwitchToGuided ? (
-          <button
-            type="button"
-            onClick={onSwitchToGuided}
-            className="mt-5 text-sm font-black text-cyan-100/74 underline decoration-cyan-100/24 underline-offset-4 transition hover:text-cyan-50 hover:decoration-cyan-100/70"
-          >
-            Want help learning the fretboard? Try Guided Learning
-          </button>
-        ) : null}
-        {onSwitchToNameTheNote ? (
-          <button
-            type="button"
-            onClick={onSwitchToNameTheNote}
-            className="mt-3 block text-sm font-black text-cyan-100/74 underline decoration-cyan-100/24 underline-offset-4 transition hover:text-cyan-50 hover:decoration-cyan-100/70"
-          >
-            Try Name the Note
-          </button>
-        ) : null}
       </div>
     </div>
   );
@@ -1316,6 +1318,60 @@ function DropGameHud({
 }) {
   const seconds = Math.ceil(timeLeftMs / 1000);
   const speedConfig = getDropSpeedModeConfig(speedMode);
+  const isPhoneLandscape = usePhoneLandscape();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const focusSummary = runMode === "focus"
+    ? `Focus Practice · ${focusPoolSize} cells`
+    : `Focus: ${getPracticeLabel(stringSelection, practiceContext)}`;
+
+  if (isPhoneLandscape) {
+    return (
+      <div className="drop-game-hud flex flex-col gap-1">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-950/86 p-2 shadow-lg">
+          <button
+            type="button"
+            onClick={onHome}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-200 hover:border-amber-300/70 hover:text-amber-100"
+            aria-label="Home"
+            title="Home"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <HudStat label="Score" value={score} strong className="flex min-w-0 flex-1" />
+          <Lives value={lives} />
+          <div className="flex h-11 min-w-20 items-center justify-center gap-2 rounded-lg border border-cyan-200/25 bg-cyan-300/12 px-3 font-mono text-2xl font-black text-cyan-50">
+            <Timer className="h-5 w-5 text-cyan-200" />
+            {seconds}
+          </div>
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((isOpen) => !isOpen)}
+            aria-expanded={detailsOpen}
+            aria-label={detailsOpen ? "Hide run details" : "Show run details"}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition ${detailsOpen
+                ? "border-amber-100/70 bg-amber-300/16 text-amber-100"
+                : "border-slate-700 text-slate-200 hover:border-cyan-200/70 hover:text-cyan-100"
+              }`}
+          >
+            <Info className="h-5 w-5" />
+          </button>
+        </div>
+        {detailsOpen ? (
+          <div className="drop-game-hud-details flex flex-wrap items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-950/92 p-2 shadow-lg">
+            <HudStat label="Combo" value={combo} />
+            <HudStat label="Best" value={bestScore} icon={<Trophy className="h-4 w-4 text-amber-200" />} />
+            <div className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/70 px-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100">
+              <span>{focusSummary} · {speedConfig.label}</span>
+              {import.meta.env.DEV && targetDurationMs ? (
+                <span className="ml-3 border-l border-slate-700/80 pl-3 text-[10px] text-slate-500">Dev pacing: {targetDurationMs}ms</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="drop-game-hud grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-950/86 p-2 shadow-lg sm:grid-cols-[auto_repeat(3,minmax(5.5rem,auto))_1fr_auto]">
       <button
@@ -1331,7 +1387,7 @@ function DropGameHud({
       <HudStat label="Combo" value={combo} />
       <HudStat label="Best" value={bestScore} icon={<Trophy className="h-4 w-4 text-amber-200" />} className="hidden sm:flex" />
       <div className="hidden items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/70 px-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 xl:flex">
-        <span>{runMode === "focus" ? `Focus Practice · ${focusPoolSize} cells` : `Focus: ${getPracticeLabel(stringSelection, practiceContext)}`} · {speedConfig.label}</span>
+        <span>{focusSummary} · {speedConfig.label}</span>
         {import.meta.env.DEV && targetDurationMs ? (
           <span className="ml-3 border-l border-slate-700/80 pl-3 text-[10px] text-slate-500">Dev pacing: {targetDurationMs}ms</span>
         ) : null}
@@ -1739,8 +1795,7 @@ function DropGameFretboard({
     <div className="drop-fretboard overflow-hidden rounded-lg border border-cyan-200/20 bg-[#2d1d12] p-2 shadow-[0_-18px_52px_rgba(0,0,0,0.35)_inset,0_0_34px_rgba(14,165,233,0.08)]">
       <FretNumberRow frets={frets} />
       <PositionDotRow frets={frets} />
-      <div className="mt-1">
-        {strings.map((stringIndex) => {
+      {strings.map((stringIndex) => {
           const typedStringIndex = stringIndex as DropStringIndex;
           const visualState = getStringVisualState(typedStringIndex, selectedStrings, visibleTargets);
           const isActiveTargetString = visualState === "active-target";
@@ -1753,10 +1808,10 @@ function DropGameFretboard({
           const selectedLineColor = getAccentRgba(accent.color, 0.68);
           const unselectedLineColor = "rgba(254,243,199,0.25)";
           return (
-            <div key={stringIndex} className="drop-fretboard-string-row relative grid min-h-8 grid-cols-[2rem_repeat(12,minmax(0,1fr))] items-center overflow-visible sm:min-h-9">
+            <div key={stringIndex} className="drop-fretboard-string-row relative min-h-8 items-center overflow-visible sm:min-h-9">
               {isActiveTargetString ? (
                 <div
-                  className="pointer-events-none absolute left-8 right-0 top-1/2 z-0 h-5 -translate-y-1/2 rounded-full border-y border-white/8"
+                  className="drop-fretboard-active-rail pointer-events-none absolute top-1/2 right-0 z-0 h-5 -translate-y-1/2 rounded-full border-y border-white/8"
                   style={{
                     background: `linear-gradient(90deg, transparent, ${activeRailSoft} 18%, ${activeRailCore} 50%, ${activeRailSoft} 82%, transparent)`,
                     boxShadow: `0 0 10px ${activeRailGlow}, inset 0 0 8px ${accent.softColor}`,
@@ -1811,7 +1866,6 @@ function DropGameFretboard({
             </div>
           );
         })}
-      </div>
       <PositionDotRow frets={frets} />
       <FretNumberRow frets={frets} />
     </div>
@@ -1852,7 +1906,7 @@ function FretFeedback({ feedback }: { feedback: DropFeedback }) {
 
 function FretNumberRow({ frets }: { frets: number[] }) {
   return (
-    <div className="grid grid-cols-[2rem_repeat(12,minmax(0,1fr))] text-center font-mono text-[9px] font-bold text-amber-100/62">
+    <div className="drop-fretboard-header-row text-center font-mono text-[9px] font-bold text-amber-100/62">
       <div />
       {frets.map((fret) => (
         <div key={fret} className={fret === 0 ? "text-[8px] uppercase text-cyan-100/80" : ""}>
@@ -1865,7 +1919,7 @@ function FretNumberRow({ frets }: { frets: number[] }) {
 
 function PositionDotRow({ frets }: { frets: number[] }) {
   return (
-    <div className="grid h-4 grid-cols-[2rem_repeat(12,minmax(0,1fr))] items-center">
+    <div className="drop-fretboard-header-row h-4 items-center">
       <div />
       {frets.map((fret) => {
         const isDouble = DOUBLE_DOT_FRETS.includes(fret);

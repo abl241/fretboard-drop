@@ -42,7 +42,7 @@ describe("Fretboard Drop note audio", () => {
   });
 
   it("stores the note sound preference locally", () => {
-    expect(readNoteSoundEnabled()).toBe(false);
+    expect(readNoteSoundEnabled()).toBe(true);
 
     writeNoteSoundEnabled(true);
     expect(window.localStorage.getItem(DROP_NOTE_SOUND_STORAGE_KEY)).toBe("on");

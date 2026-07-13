@@ -37,9 +37,12 @@ export function getGuitarNoteFrequency(stringIndex: DropStringIndex, fret: numbe
 
 export function readNoteSoundEnabled(): boolean {
   try {
-    return window.localStorage.getItem(DROP_NOTE_SOUND_STORAGE_KEY) === "on";
+    const stored = window.localStorage.getItem(DROP_NOTE_SOUND_STORAGE_KEY);
+    // Default on so note feedback plays until the player explicitly turns it off.
+    if (stored === null) return true;
+    return stored === "on";
   } catch {
-    return false;
+    return true;
   }
 }
 
