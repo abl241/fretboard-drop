@@ -167,29 +167,23 @@ describe("NameTheNoteGame", () => {
     expect(screen.queryByTestId("name-note-question-progress")).not.toBeInTheDocument();
   });
 
-  it("keeps the fretboard stable while answer button fills drain with countdownFraction", () => {
+  it("moves the countdown from answer fills to the target ring", () => {
     vi.useFakeTimers();
     const advanceClock = mockPerformanceClock();
     render(<NameTheNoteGame />);
     selectOnlyNote("A");
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
-    const fretboard = screen.getByTestId("name-note-fretboard");
-    expect(fretboard).not.toHaveAttribute("data-countdown-band");
-    expect(fretboard).not.toHaveAttribute("data-countdown-fraction");
-    const initialStyle = fretboard.getAttribute("style");
-    const answerFill = screen.getByTestId("answer-fill-A");
-    expect(answerFill).toHaveAttribute("data-countdown-fraction", "1.00");
-    expect(answerFill).toHaveStyle({ height: "100%" });
+    const targetRing = screen.getByTestId("name-note-target-ring");
+    expect(screen.queryByTestId("answer-fill-A")).not.toBeInTheDocument();
+    expect(targetRing).toHaveAttribute("data-countdown-fraction", "1.00");
     expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("4s");
 
     act(() => {
       advanceClock(2_200);
     });
 
-    expect(fretboard.getAttribute("style")).toBe(initialStyle);
-    expect(answerFill).toHaveAttribute("data-countdown-fraction", "0.45");
-    expect(answerFill).toHaveStyle({ height: "45%" });
+    expect(targetRing).toHaveAttribute("data-countdown-fraction", "0.45");
     expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("2s");
   });
 
@@ -210,8 +204,22 @@ describe("NameTheNoteGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Answer A" }));
 
     expect(screen.getAllByText("Correct").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "correct");
+    expect(screen.getByTestId("name-note-earned-points")).toHaveTextContent("+20");
+    expect(screen.getByRole("button", { name: "Answer A" })).toHaveAttribute("data-feedback", "correct");
     expect(getRunStat("Run Points")).toHaveTextContent("20");
     expect(getRunStat("Streak")).toHaveTextContent("1");
+  });
+
+  it("keeps keyboard answer controls active", () => {
+    render(<NameTheNoteGame />);
+    selectOnlyNote("A");
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    fireEvent.keyDown(window, { key: "a" });
+
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "correct");
+    expect(screen.getByTestId("name-note-earned-points")).toHaveTextContent("+20");
   });
 
   it("lets the player retry after wrong answers without revealing or resetting the question timer", () => {
@@ -270,9 +278,26 @@ describe("NameTheNoteGame", () => {
       advanceClock(4_050);
     });
 
-    expect(screen.getByText("Time - it was A")).toBeInTheDocument();
+    const targetKey = screen.getByTestId("name-note-target-cell").getAttribute("data-target-key");
+    expect(screen.getByText("Time's up · A")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("TIME");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "timeout");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveTextContent("A");
     expect(screen.getByRole("button", { name: "Answer A" })).toHaveClass("border-emerald-100");
     expect(screen.getByRole("button", { name: "Answer B" })).toBeDisabled();
+
+    act(() => {
+      advanceClock(1_500);
+    });
+
+    expect(screen.getByText("Time's up · A")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-target-cell")).toHaveAttribute("data-target-key", targetKey);
+
+    act(() => {
+      advanceClock(150);
+    });
+
+    expect(screen.queryByText("Time's up · A")).not.toBeInTheDocument();
   });
 
   it("ends at session expiration and shows the results summary", () => {

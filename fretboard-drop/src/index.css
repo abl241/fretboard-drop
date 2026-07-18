@@ -39,6 +39,85 @@ body {
   block-size: clamp(15.5rem, 43dvh, 20rem);
 }
 
+.name-note-target-ring {
+  box-shadow: 0 0 18px rgba(103, 232, 249, 0.26);
+  transition: background 75ms linear, box-shadow 160ms ease;
+}
+
+.name-note-target-ring--urgent {
+  box-shadow: 0 0 22px rgba(251, 191, 36, 0.42);
+  animation: name-note-target-urgency 720ms ease-in-out infinite;
+}
+
+.name-note-target-marker--correct {
+  animation: name-note-target-correct 420ms ease-out both;
+}
+
+.name-note-target-marker--timeout {
+  box-shadow: 0 0 20px rgba(252, 113, 113, 0.52);
+}
+
+.name-note-earned-points {
+  position: absolute;
+  top: -1.35rem;
+  left: 50%;
+  color: #d1fae5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-shadow: 0 1px 5px rgba(6, 78, 59, 0.92);
+  transform: translateX(-50%);
+  animation: name-note-earned-points 440ms ease-out both;
+}
+
+.name-note-streak-value {
+  animation: name-note-streak-celebrate 380ms ease-out both;
+}
+
+.name-note-answer--wrong {
+  animation: name-note-answer-wrong 260ms ease-out both;
+}
+
+@keyframes name-note-target-urgency {
+  50% {
+    transform: translate(-50%, -50%) scale(1.055);
+  }
+}
+
+@keyframes name-note-target-correct {
+  45% {
+    transform: scale(1.14);
+    box-shadow: 0 0 26px rgba(110, 231, 183, 0.68);
+  }
+}
+
+@keyframes name-note-earned-points {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -0.5rem);
+  }
+}
+
+@keyframes name-note-streak-celebrate {
+  45% {
+    color: #fef3c7;
+    transform: scale(1.14);
+  }
+}
+
+@keyframes name-note-answer-wrong {
+  20%,
+  60% {
+    border-color: #fecaca;
+    transform: translateX(-2px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+
 @media (orientation: landscape) and (max-height: 560px) {
   .name-note-fretboard {
     block-size: clamp(10.5rem, 43dvh, 14rem);
@@ -206,6 +285,14 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .name-note-target-ring--urgent,
+  .name-note-target-marker--correct,
+  .name-note-earned-points,
+  .name-note-streak-value,
+  .name-note-answer--wrong {
+    animation: none;
+  }
+
   .horizontal-deadline-pick {
     transition: none;
   }

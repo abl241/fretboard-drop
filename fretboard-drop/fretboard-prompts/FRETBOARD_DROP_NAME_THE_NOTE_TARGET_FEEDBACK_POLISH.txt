@@ -1,0 +1,422 @@
+FRETBOARD DROP
+NAME THE NOTE TARGET-CENTERED COUNTDOWN AND GAME FEEDBACK POLISH
+
+MODEL RECOMMENDATION
+Model: Terra
+Effort: High
+Speed: Standard
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+PRIMARY GOAL
+
+Improve the active Name the Note gameplay loop so it feels more polished, exciting, game-like, and App Store-ready without changing the core rules.
+
+The current layout is cleaner and responsive, but the moment-to-moment feedback still feels like a quiz form rather than a premium learning game.
+
+The weakest element is the repeated draining cyan fill inside all seven A-G answer buttons. It looks rudimentary, duplicates the same countdown seven times, and pulls attention away from the actual fretboard target.
+
+The better interaction model is:
+
+target appears → pressure builds around the target → player answers → clear feedback → next target
+
+ARE WE SOLVING THE ROOT PROBLEM, OR JUST PATCHING THE CURRENT ARCHITECTURE?
+
+Solve the root problem.
+
+Do not merely improve the button fill gradient, change colors, or add more glow to the existing seven draining fills.
+
+The root problem is that the countdown and feedback are attached to the answer buttons instead of the target and resolved outcome.
+
+Use the existing semantic state and keep the architecture simple.
+
+DESIGN PRINCIPLES
+
+STEVE KRUG
+
+- The player should immediately understand what to watch and what to do.
+- The countdown should live where the player is already looking: the fretboard target.
+- Answer buttons should remain stable and easy to scan.
+- Correct, wrong, and timeout states must be unmistakable.
+- Do not add visual ambiguity or competing countdown indicators.
+
+STEVE JOBS
+
+- Make one interaction feel excellent rather than adding many effects.
+- Use restraint, hierarchy, rhythm, and precise timing.
+- The target should feel like the hero of the screen.
+- Feedback should feel satisfying but not flashy or noisy.
+- Preserve the current visual identity and improve the emotional clarity of each answer.
+
+ROB PIKE AND KEN THOMPSON
+
+- Prefer the smallest clear implementation.
+- Reuse the current reducer state, timing values, target model, and scoring logic.
+- Do not add another animation state machine, renderer, or broad abstraction.
+- Use semantic state plus CSS transitions and animations.
+- Avoid duplicate calculations and multiple sources of truth.
+- Keep core gameplay logic separate from presentation.
+
+EDWARD TUFTE
+
+- Remove duplicated visual information.
+- Keep the target, timer, answer choices, score, and streak legible.
+- Use animation to clarify state, not decorate the screen.
+- Do not let effects obscure musical information.
+
+FILES TO INSPECT FIRST
+
+Inspect the current repository and confirm exact paths before editing. Likely files include:
+
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.tsx`
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.test.tsx`
+- `src/index.css`
+- any small shared animation or accessibility utility already used by this app
+
+Do not broadly reread unrelated documentation or redesign other modes.
+
+CURRENT REPO DETAILS TO VERIFY
+
+The current implementation appears to include:
+
+- `NAME_THE_NOTE_QUESTION_DURATION_MS = 4_000`
+- `NAME_THE_NOTE_ADVANCE_CORRECT_MS = 450`
+- `NAME_THE_NOTE_ADVANCE_REVEAL_MS = 700`
+- `countdownFraction` stored on the active question
+- answer-button fill elements using `countdownFraction`
+- target marker state driven by `outcome`
+- retry-after-wrong-answer behavior
+- timeout behavior that reveals the correct answer and advances after 700 ms
+- tests that explicitly expect answer fills to drain
+- tests that confirm timeout text and the correct answer button appear
+
+Confirm the actual implementation before editing.
+
+SCOPE
+
+Change only the active Name the Note gameplay feedback and the smallest supporting code required.
+
+Preserve:
+
+- target generation
+- shuffled deck behavior
+- note-answer logic
+- retry after wrong answer
+- run duration
+- question duration
+- scoring formula
+- streak rules
+- Run Points
+- Fluency calculations
+- persistence
+- setup screen
+- results screen
+- keyboard input
+- Free Play
+- Guided Learning
+- original Fretboard Drop mode
+- responsive mobile layout
+- safe-area handling
+- proportional fret spacing
+- all current stored data formats
+
+Do not add:
+
+- backend
+- auth
+- database
+- analytics
+- sound
+- haptics
+- particles
+- screen shake
+- combo system
+- new scoring rules
+- new persistence
+- Canvas
+- native SwiftUI renderer
+- broad SVG rewrite
+- another animation library
+- browser automation
+- Playwright
+- screenshot testing
+- live-preview automation
+
+REQUIRED IMPLEMENTATION OUTCOMES
+
+1. REMOVE THE SEVEN DRAINING ANSWER FILLS
+
+Remove the countdown fill layers from all A-G buttons.
+
+Remove related implementation details such as:
+
+- `answer-fill-*` elements
+- per-button countdown height styles
+- duplicated fill-tone logic used only for the timer
+- tests that expect the fills to drain
+
+Do not leave hidden timer fills in the DOM.
+
+The answer buttons should remain visually stable during the question.
+
+2. ADD ONE TARGET-CENTERED COUNTDOWN RING
+
+Use the existing `countdownFraction`.
+
+Pass it through the smallest necessary component path:
+
+- active question
+- `NameTheNoteFretboard`
+- target cell or marker
+
+Render a restrained circular countdown ring around the target marker.
+
+Preferred implementation:
+
+- CSS `conic-gradient`
+- no new dependency
+- no JavaScript resize or animation engine
+- ring starts full and drains clockwise
+- marker center and fret/string position remain unchanged
+- ring must not alter grid geometry
+- ring must not clip on strings 1 or 6
+- ring remains legible on small iPhone screens
+
+The fretboard itself must remain visually stable.
+
+Do not add a conventional horizontal progress bar.
+
+3. ADD FINAL-SECOND URGENCY
+
+During the final second:
+
+- subtly shift the ring from cyan toward amber
+- add a restrained pulse or glow
+- do not move the target
+- do not shake the screen
+- do not add a new warning banner
+
+Keep the numeric question timer for clarity.
+
+Respect `prefers-reduced-motion`.
+
+4. IMPROVE CORRECT-ANSWER FEEDBACK
+
+On a correct answer:
+
+- target marker changes to green
+- selected correct answer button changes to green
+- target gets a brief restrained ripple or scale response
+- show a transient `+points` indicator using the actual earned score for that answer
+- animate the streak value modestly when it increases
+- keep the current correct-answer advance delay near 450 ms unless inspection shows a strong reason to adjust it slightly
+
+Do not recalculate points separately in the UI.
+
+Use the score value already computed by the reducer or store the earned points once in the resolved question state.
+
+The `+points` indicator should appear for roughly the resolved interval and then disappear with the next question.
+
+5. IMPROVE WRONG-ANSWER FEEDBACK
+
+Preserve current retry behavior.
+
+On a wrong answer:
+
+- the selected wrong button gives a brief restrained red edge flash or small horizontal shake
+- the wrong button then remains visibly unavailable
+- the target stays active
+- the correct answer is not revealed
+- the timer continues
+- the question does not reset
+- other answer buttons remain available
+
+Do not add a large error banner.
+
+6. EXTEND TIMEOUT REVEAL
+
+Change the timeout reveal duration from the current 700 ms to:
+
+```ts
+const NAME_THE_NOTE_ADVANCE_REVEAL_MS = 1_600;
+```
+
+The correct answer must remain visible long enough to support learning.
+
+During the timeout reveal:
+
+- target marker changes to amber or red
+- correct note letter appears clearly inside or immediately attached to the target marker
+- correct A-G answer button lights green
+- panel text clearly states the answer, for example `Time's up · C` or `Correct note: C`
+- next target must not appear until the full 1.6 second reveal interval has elapsed
+
+Do not let `0s` remain the dominant message during the reveal.
+
+During timeout resolution, either:
+
+- replace the numeric badge with the correct note,
+- hide the numeric countdown badge,
+- or change it to a compact `TIME` state
+
+Choose the simplest clear option.
+
+7. KEEP FEEDBACK STATES SEMANTIC
+
+Use existing semantic state such as:
+
+- `outcome`
+- `countdownFraction`
+- `selectedNote`
+- `wrongAnswers`
+- `advanceAt`
+- score and streak
+
+Add only the smallest new field required, such as `earnedPoints`, if necessary.
+
+Do not add a separate animation reducer.
+
+Do not create duplicate countdown logic.
+
+8. ACCESSIBILITY
+
+- Respect `prefers-reduced-motion`
+- Preserve keyboard controls
+- Keep answer buttons accessible
+- Keep correct, wrong, and timeout states understandable without animation alone
+- Preserve or improve aria labels
+- Do not rely on color alone for timeout or wrong-answer meaning
+
+9. MOBILE AND DESKTOP QUALITY
+
+The new ring and feedback must work on:
+
+- small iPhone portrait
+- modern iPhone portrait
+- larger iPhone portrait
+- desktop
+- narrow landscape sanity check
+
+Do not reintroduce clipping or layout overflow.
+
+Do not reduce answer button touch size below comfortable mobile use.
+
+TEST REQUIREMENTS
+
+Update focused tests to protect behavior, not implementation details.
+
+Remove or replace the test that expects answer fills to drain.
+
+Add or update tests for:
+
+1. no answer-fill elements render
+2. target marker receives the countdown fraction
+3. target-centered countdown updates over time
+4. correct answer shows correct marker/button feedback
+5. earned points are shown from the real scoring result
+6. wrong answer remains retryable and does not reveal the answer
+7. timeout reveals the correct answer
+8. timeout keeps the same target visible before 1.6 seconds
+9. timeout advances only after the full 1.6 second reveal
+10. all A-G buttons remain present and correctly ordered
+11. keyboard controls still work
+12. no core scoring, persistence, or run behavior changed
+
+Avoid brittle tests that assert long className strings.
+
+Use test IDs or semantic attributes only where they represent a meaningful UI contract.
+
+VALIDATION
+
+Do not use browser automation, Playwright, screenshot comparison, or live-preview automation. I will manually inspect the visual result.
+
+Run:
+
+- `pnpm run typecheck`
+- `pnpm run test`
+- `pnpm run build`
+
+If the repository uses different established commands, use those equivalents.
+
+IMPLEMENTATION OPTIONS TO CONSIDER
+
+Before editing, briefly compare:
+
+OPTION 1: STYLE THE EXISTING SEVEN FILLS
+
+Examples:
+
+- better gradient
+- glow boundary
+- rounded fill edge
+
+Reject this. It improves decoration but preserves the wrong interaction model.
+
+OPTION 2: FOCUSED TARGET-CENTERED FEEDBACK REFACTOR
+
+Expected best choice:
+
+- one countdown ring around the target
+- stable answer buttons
+- clearer correct/wrong/timeout states
+- longer timeout teaching moment
+- brief earned-points and streak feedback
+
+Prefer this.
+
+OPTION 3: BROAD ARCADE EFFECT SYSTEM
+
+Examples:
+
+- particles
+- sound
+- haptics
+- combo meter
+- screen shake
+- animation framework
+
+Reject this for now. It is unnecessary and increases maintenance.
+
+GUARDRAILS
+
+- Keep changes localized.
+- Do not modify unrelated modes.
+- Do not change scoring rules.
+- Do not change question duration.
+- Do not change run duration.
+- Do not change persistence keys.
+- Do not change Fluency calculations.
+- Do not change target generation.
+- Do not add new dependencies unless absolutely unavoidable.
+- Do not use per-device offsets.
+- Do not add decorative clutter.
+- Do not commit or push unless explicitly instructed.
+
+FINAL RESPONSE FORMAT
+
+Report:
+
+1. Root problem confirmed
+2. Files changed
+3. How the seven draining fills were removed
+4. How the target countdown ring works
+5. Correct-answer feedback
+6. Wrong-answer feedback
+7. Timeout reveal timing and teaching state
+8. Any new state field added and why
+9. Accessibility and reduced-motion handling
+10. What was deliberately preserved
+11. Typecheck, test, and build results
+12. Manual checks for the user
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if all requested code changes and checks are finished.
+
+Otherwise end with:
+
+TASK INCOMPLETE
+
+Then state the exact blocker or remaining work.

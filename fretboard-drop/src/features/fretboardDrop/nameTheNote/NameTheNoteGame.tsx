@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft, RotateCcw, Timer, Trophy, Zap } from "lucide-react";
 import type { Note } from "@/lib/fretboard";
 import { DOT_FRETS } from "@/lib/fretboard";
@@ -30,7 +30,7 @@ export const NAME_THE_NOTE_BEST_SCORE_KEY = "fretboard-drop:name-the-note:best-s
 export const NAME_THE_NOTE_RUN_DURATION_MS = DROP_RUN_DURATION_MS;
 export const NAME_THE_NOTE_QUESTION_DURATION_MS = 4_000;
 const NAME_THE_NOTE_ADVANCE_CORRECT_MS = 450;
-const NAME_THE_NOTE_ADVANCE_REVEAL_MS = 700;
+const NAME_THE_NOTE_ADVANCE_REVEAL_MS = 1_600;
 const NAME_THE_NOTE_ANSWER_NOTES = ["A", "B", "C", "D", "E", "F", "G"] as const satisfies readonly Note[];
 const NAME_THE_NOTE_STRING_GAUGES = [1, 1.25, 1.5, 2, 2.5, 3] as const;
 
@@ -52,6 +52,7 @@ type NameTheNoteQuestion = {
   selectedNote: Note | null;
   wrongAnswers: readonly Note[];
   hadWrongAttempt: boolean;
+  earnedPoints: number | null;
   advanceAt: number | null;
 };
 
@@ -218,6 +219,7 @@ function createQuestion(now: number, target: FretboardTarget): NameTheNoteQuesti
     selectedNote: null,
     wrongAnswers: [],
     hadWrongAttempt: false,
+    earnedPoints: null,
     advanceAt: null,
   };
 }
@@ -365,9 +367,10 @@ function nameTheNoteReducer(state: NameTheNoteState, action: NameTheNoteAction):
         correctResponseCount: state.correctResponseCount + 1,
         activeQuestion: {
           ...timedQuestion,
-          outcome: "correct",
-          selectedNote: action.note,
-          advanceAt: action.now + NAME_THE_NOTE_ADVANCE_CORRECT_MS,
+            outcome: "correct",
+            selectedNote: action.note,
+            earnedPoints: earned,
+            advanceAt: action.now + NAME_THE_NOTE_ADVANCE_CORRECT_MS,
         },
       };
     }
@@ -769,7 +772,7 @@ function NameTheNoteRunScreen({
           <ArrowLeft className="h-5 w-5" />
         </button>
         <RunStat label="Run Points" value={state.score} strong />
-        <RunStat label="Streak" value={state.streak} />
+        <RunStat label="Streak" value={state.streak} celebrate={question?.outcome === "correct" && state.streak > 0} />
         <div className="hidden items-center justify-start gap-2 px-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 sm:flex">
           <Trophy className="h-4 w-4 text-amber-200/70" />
           Best {bestScore}
@@ -786,6 +789,8 @@ function NameTheNoteRunScreen({
           <NameTheNoteFretboard
             target={question.target}
             outcome={question.outcome}
+            countdownFraction={question.countdownFraction}
+            earnedPoints={question.earnedPoints}
             revealedCorrectNote={question.outcome === "idle" ? undefined : question.target.note}
             interactionEnabled={question.outcome === "idle"}
           />
@@ -801,18 +806,20 @@ function RunStat({
   value,
   icon,
   strong = false,
+  celebrate = false,
   className = "flex",
 }: {
   label: string;
   value: number;
   icon?: ReactNode;
   strong?: boolean;
+  celebrate?: boolean;
   className?: string;
 }) {
   return (
     <div className={`${className} h-10 min-w-24 items-center justify-between gap-3 rounded-md border border-slate-700/55 bg-slate-900/62 px-3`}>
       <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</span>
-      <span className={`flex items-center gap-1 font-mono font-black text-white ${strong ? "text-2xl" : "text-xl"}`}>
+      <span className={`flex items-center gap-1 font-mono font-black text-white ${strong ? "text-2xl" : "text-xl"} ${celebrate ? "name-note-streak-value" : ""}`}>
         {icon}
         {value}
       </span>
@@ -823,6 +830,8 @@ function RunStat({
 type NameTheNoteFretboardViewState = {
   target: FretboardTarget;
   outcome: QuestionOutcome;
+  countdownFraction: number;
+  earnedPoints: number | null;
   revealedCorrectNote?: Note;
   interactionEnabled: boolean;
 };
@@ -834,6 +843,8 @@ function clampCountdownFraction(countdownFraction: number): number {
 function NameTheNoteFretboard({
   target,
   outcome,
+  countdownFraction,
+  earnedPoints,
   revealedCorrectNote,
   interactionEnabled,
 }: NameTheNoteFretboardViewState) {
@@ -891,6 +902,9 @@ function NameTheNoteFretboard({
               isTarget={target.stringIndex === stringIndex && target.fret === 0}
               isOpen
               markerTone={markerTone}
+              outcome={outcome}
+              countdownFraction={countdownFraction}
+              earnedPoints={earnedPoints}
               target={target}
               stringIndex={stringIndex}
               revealedCorrectNote={revealedCorrectNote}
@@ -902,6 +916,9 @@ function NameTheNoteFretboard({
                 isTarget={target.stringIndex === stringIndex && target.fret === fret}
                 isOpen={false}
                 markerTone={markerTone}
+                outcome={outcome}
+                countdownFraction={countdownFraction}
+                earnedPoints={earnedPoints}
                 target={target}
                 stringIndex={stringIndex}
                 revealedCorrectNote={revealedCorrectNote}
@@ -919,6 +936,9 @@ function TargetCell({
   isTarget,
   isOpen,
   markerTone,
+  outcome,
+  countdownFraction,
+  earnedPoints,
   target,
   stringIndex,
   revealedCorrectNote,
@@ -927,12 +947,21 @@ function TargetCell({
   isTarget: boolean;
   isOpen: boolean;
   markerTone: string;
+  outcome: QuestionOutcome;
+  countdownFraction: number;
+  earnedPoints: number | null;
   target: FretboardTarget;
   stringIndex: DropStringIndex;
   revealedCorrectNote?: Note;
   interactionEnabled: boolean;
 }) {
   const stringGauge = getNameTheNoteStringGauge(stringIndex);
+  const ringFraction = outcome === "idle" ? clampCountdownFraction(countdownFraction) : 0;
+  const isUrgent = outcome === "idle" && ringFraction <= 0.25;
+  const ringColor = isUrgent ? "rgba(251, 191, 36, 0.98)" : "rgba(103, 232, 249, 0.98)";
+  const ringStyle = {
+    background: `conic-gradient(${ringColor} ${ringFraction * 100}%, rgba(103, 232, 249, 0.12) 0)`,
+  } satisfies CSSProperties;
   return (
     <div
       className={`relative z-10 flex h-full min-h-0 items-center justify-center ${isOpen ? "border-r-[6px] border-r-amber-100/90 bg-slate-950/20" : "border-l border-amber-100/34"}`}
@@ -950,12 +979,28 @@ function TargetCell({
       ) : null}
       {isTarget ? (
         <span
-          className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border shadow-[0_0_18px_rgba(103,232,249,0.48)] sm:h-9 sm:w-9 ${markerTone}`}
-          aria-label={`Target marker ${target.targetKey}`}
-          data-interaction-enabled={interactionEnabled ? "true" : "false"}
+          className={`name-note-target-ring absolute left-1/2 top-1/2 z-10 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full p-[3px] ${isUrgent ? "name-note-target-ring--urgent" : ""}`}
+          style={ringStyle}
+          data-testid="name-note-target-ring"
+          data-countdown-fraction={ringFraction.toFixed(2)}
+          data-urgent={isUrgent ? "true" : "false"}
         >
-          <span className="h-2 w-2 rounded-full bg-slate-950/82" aria-hidden="true" />
-          {revealedCorrectNote ? <span className="sr-only">Correct note {revealedCorrectNote}</span> : null}
+          <span
+            className={`name-note-target-marker relative flex h-full w-full items-center justify-center rounded-full border shadow-[0_0_18px_rgba(103,232,249,0.48)] ${markerTone} ${outcome === "correct" ? "name-note-target-marker--correct" : ""} ${outcome === "timeout" ? "name-note-target-marker--timeout" : ""}`}
+            aria-label={`Target marker ${target.targetKey}${outcome === "timeout" && revealedCorrectNote ? `, correct note ${revealedCorrectNote}` : ""}`}
+            data-testid="name-note-target-marker"
+            data-interaction-enabled={interactionEnabled ? "true" : "false"}
+            data-outcome={outcome}
+          >
+            {outcome === "timeout" && revealedCorrectNote ? (
+              <span className="font-mono text-sm font-black text-slate-950">{revealedCorrectNote}</span>
+            ) : (
+              <span className="h-2 w-2 rounded-full bg-slate-950/82" aria-hidden="true" />
+            )}
+          </span>
+          {outcome === "correct" && earnedPoints !== null ? (
+            <span className="name-note-earned-points" data-testid="name-note-earned-points" aria-live="polite">+{earnedPoints}</span>
+          ) : null}
         </span>
       ) : null}
     </div>
@@ -970,12 +1015,10 @@ function AnswerPanel({
   onAnswer: (note: Note) => void;
 }) {
   const isResolved = question.outcome !== "idle";
-  const countdownFraction = clampCountdownFraction(question.countdownFraction);
-  const countdownPercent = `${Math.round(countdownFraction * 1_000) / 10}%`;
   const feedback = question.outcome === "correct"
     ? "Correct"
     : question.outcome === "timeout"
-      ? `Time - it was ${question.target.note}`
+      ? `Time's up · ${question.target.note}`
       : question.wrongAnswers.length > 0
         ? "Try again"
         : "Name this position";
@@ -986,10 +1029,11 @@ function AnswerPanel({
         <span>{feedback}</span>
         <span
           className="rounded border border-cyan-100/20 bg-cyan-200/10 px-2 py-1 font-mono text-cyan-100"
-          aria-label="Question time remaining"
+          aria-label={question.outcome === "timeout" ? `Correct note ${question.target.note}` : "Question time remaining"}
           data-testid="name-note-question-countdown"
+          data-state={question.outcome === "timeout" ? "time" : "counting"}
         >
-          {Math.ceil(question.remainingQuestionMs / 1000)}s
+          {question.outcome === "timeout" ? "TIME" : `${Math.ceil(question.remainingQuestionMs / 1000)}s`}
         </span>
       </div>
       <div
@@ -1002,7 +1046,6 @@ function AnswerPanel({
           const isWrongAttempt = question.wrongAnswers.includes(note);
           const isCorrectNote = isResolved && question.target.note === note;
           const isDisabled = isResolved || isWrongAttempt;
-          const fillTone = isWrongAttempt ? "bg-red-500/82" : isCorrectNote ? "bg-emerald-300" : "bg-cyan-300/74";
           return (
             <button
               key={note}
@@ -1010,22 +1053,16 @@ function AnswerPanel({
               onClick={() => onAnswer(note)}
               disabled={isDisabled}
               aria-label={`Answer ${note}`}
-              className={`relative isolate h-12 min-w-0 overflow-hidden rounded-md border px-2 font-mono text-2xl font-black transition sm:h-14 sm:text-[1.65rem] ${
+              className={`name-note-answer relative h-12 min-w-0 rounded-md border px-2 font-mono text-2xl font-black transition sm:h-14 sm:text-[1.65rem] ${
                 isWrongAttempt
-                  ? "border-red-100 bg-red-950/80 text-red-50"
+                  ? "name-note-answer--wrong border-red-100 bg-red-950/80 text-red-50"
                   : isCorrectNote || isSelected
                     ? "border-emerald-100 bg-emerald-950/74 text-emerald-50"
                     : "border-cyan-100/24 bg-slate-900/86 text-cyan-50 hover:border-cyan-100/70 hover:bg-cyan-200/10 disabled:opacity-90"
               }`}
+              data-feedback={isWrongAttempt ? "wrong" : isCorrectNote || isSelected ? "correct" : "idle"}
             >
-              <span
-                className={`absolute inset-x-0 bottom-0 z-0 transition-[height] duration-75 ${fillTone} shadow-[0_-1px_0_rgba(255,255,255,0.35)_inset]`}
-                style={{ height: countdownPercent }}
-                aria-hidden="true"
-                data-testid={`answer-fill-${note}`}
-                data-countdown-fraction={countdownFraction.toFixed(2)}
-              />
-              <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.85)]">{note}</span>
+              <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.85)]">{note}</span>
             </button>
           );
         })}
