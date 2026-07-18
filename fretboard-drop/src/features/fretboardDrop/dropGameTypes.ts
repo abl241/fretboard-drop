@@ -107,6 +107,7 @@ export type DropGameState = {
   stringSelection: DropStringSelection;
   practiceContext: DropPracticeContext;
   runMode: DropRunMode;
+  isHorizontalMode: boolean;
   speedMode: DropSpeedMode;
   focusPool: readonly DropFocusPoolCell[];
   bestScoreAtStart: number;

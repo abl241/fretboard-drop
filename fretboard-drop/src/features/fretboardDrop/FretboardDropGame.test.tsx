@@ -1,8 +1,16 @@
 import { act, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DROP_SPEED_MODE_STORAGE_KEY, getTargetProgress, writeBestDropScore } from "./dropGameUtils";
+import {
+  DEFAULT_DROP_PRACTICE_CONTEXT,
+  DROP_SPEED_MODE_STORAGE_KEY,
+  createInitialDropState,
+  getDropSpeedModeConfig,
+  getTargetProgress,
+  writeBestDropScore,
+} from "./dropGameUtils";
 import { appendCompletedRunToHistory } from "./dropRunHistory";
-import { FretboardDropGame } from "./FretboardDropGame";
+import { FretboardDropGame, dropGameReducer } from "./FretboardDropGame";
+import type { DropFocusPoolCell, DropSpeedMode } from "./dropGameTypes";
 import {
   DEADLINE_CONTACT_PERCENT,
   HorizontalDeadlineStage,
@@ -99,12 +107,163 @@ async function seedWeakFocusCell(): Promise<void> {
   await new LocalStorageCellProgressRepository().upsertCells([record]);
 }
 
+function startHorizontalReducerGame({
+  now = 1_000,
+  speedMode = "warm-up",
+  runMode = "normal",
+  focusPool = [],
+}: {
+  now?: number;
+  speedMode?: DropSpeedMode;
+  runMode?: "normal" | "focus";
+  focusPool?: readonly DropFocusPoolCell[];
+} = {}) {
+  return dropGameReducer(createInitialDropState(now), {
+    type: "start",
+    now,
+    bestScore: 0,
+    stringSelection: [0],
+    practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
+    speedMode,
+    runMode,
+    focusPool,
+    isHorizontalMode: true,
+  });
+}
+
 describe("FretboardDropGame", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
     window.localStorage.clear();
+  });
+
+  it("keeps the active horizontal target unchanged after a wrong answer until its original deadline", () => {
+    let state = startHorizontalReducerGame();
+    const original = state.fallingTargets[0]!;
+    const wrongFret = original.fret === 0 ? 1 : 0;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: original.startedAt + 2_000,
+      stringIndex: original.stringIndex,
+      fret: wrongFret,
+      note: original.note,
+    });
+
+    expect(state.fallingTargets).toEqual([original]);
+    expect(getTargetProgress(state.fallingTargets[0]!, original.startedAt + 2_000)).toBeCloseTo(2_000 / original.durationMs);
+
+    state = dropGameReducer(state, { type: "tick", now: state.nextStreamSpawnAt + 1 });
+    expect(state.fallingTargets).toEqual([original]);
+
+    state = dropGameReducer(state, { type: "tick", now: original.startedAt + original.durationMs - 1 });
+    expect(state.fallingTargets).toEqual([original]);
+
+    state = dropGameReducer(state, { type: "tick", now: original.startedAt + original.durationMs });
+    expect(state.fallingTargets).toHaveLength(0);
+    expect(state.missReveal).not.toBeNull();
+  });
+
+  it("creates a fresh horizontal target after a correct answer, even after a long-lived wrong-answer target", () => {
+    let state = startHorizontalReducerGame();
+    const original = state.fallingTargets[0]!;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: original.startedAt + 3_000,
+      stringIndex: original.stringIndex,
+      fret: original.fret === 0 ? 1 : 0,
+      note: original.note,
+    });
+
+    const correctAt = original.startedAt + 5_000;
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: correctAt,
+      stringIndex: original.stringIndex,
+      fret: original.fret,
+      note: original.note,
+    });
+
+    const replacement = state.fallingTargets[0]!;
+    expect(state.fallingTargets).toHaveLength(1);
+    expect(replacement.id).not.toBe(original.id);
+    expect(replacement.startedAt).toBe(correctAt);
+    expect(getTargetProgress(replacement, correctAt)).toBe(0);
+  });
+
+  it("rebases the post-miss horizontal replacement to the miss-recovery action time", () => {
+    let state = startHorizontalReducerGame();
+    const original = state.fallingTargets[0]!;
+    const expiredAt = original.startedAt + original.durationMs;
+
+    state = dropGameReducer(state, { type: "tick", now: expiredAt });
+    const missReveal = state.missReveal!;
+    expect(state.nextStreamSpawnAt).toBeLessThan(expiredAt);
+
+    const recoveryAt = expiredAt + 520;
+    state = dropGameReducer(state, { type: "finish-miss-reveal", id: missReveal.id, now: recoveryAt });
+
+    const replacement = state.fallingTargets[0]!;
+    expect(state.fallingTargets).toHaveLength(1);
+    expect(replacement.startedAt).toBe(recoveryAt);
+    expect(getTargetProgress(replacement, recoveryAt)).toBe(0);
+    expect(state.nextStreamSpawnAt).toBeGreaterThan(recoveryAt);
+  });
+
+  it("creates fresh focus-practice replacements from the selected focus pool", () => {
+    const focusPool: readonly DropFocusPoolCell[] = [{
+      cellId: "standard:0:5",
+      note: "A",
+      stringIndex: 0,
+      fret: 5,
+      fluencyScore: 12,
+    }];
+    let state = startHorizontalReducerGame({ runMode: "focus", focusPool });
+    const original = state.fallingTargets[0]!;
+    const correctAt = original.startedAt + 1_500;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: correctAt,
+      stringIndex: original.stringIndex,
+      fret: original.fret,
+      note: original.note,
+    });
+
+    const replacement = state.fallingTargets[0]!;
+    expect(replacement).toMatchObject({
+      startedAt: correctAt,
+      note: focusPool[0].note,
+      stringIndex: focusPool[0].stringIndex,
+      fret: focusPool[0].fret,
+    });
+    expect(getTargetProgress(replacement, correctAt)).toBe(0);
+  });
+
+  it("uses a fresh replacement timestamp across every speed mode without changing configured durations", () => {
+    for (const speedMode of ["warm-up", "practice-tempo", "performance-tempo"] as const) {
+      let state = startHorizontalReducerGame({ speedMode });
+      const original = state.fallingTargets[0]!;
+      const correctAt = original.startedAt + 250;
+
+      state = dropGameReducer(state, {
+        type: "fret-click",
+        now: correctAt,
+        stringIndex: original.stringIndex,
+        fret: original.fret,
+        note: original.note,
+      });
+
+      const replacement = state.fallingTargets[0]!;
+      const speedConfig = getDropSpeedModeConfig(speedMode);
+      expect(replacement.startedAt).toBe(correctAt);
+      expect(getTargetProgress(replacement, correctAt)).toBe(0);
+      expect(replacement.durationMs).toBeGreaterThanOrEqual(speedConfig.minDurationMs);
+      expect(replacement.durationMs).toBeLessThanOrEqual(speedConfig.maxDurationMs);
+    }
   });
 
   it("shows practice strings on the start screen with high E selected by default", () => {

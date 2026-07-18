@@ -861,6 +861,7 @@ export function createInitialDropState(now: number = 0): DropGameState {
     stringSelection: DEFAULT_DROP_STRING_SELECTION,
     practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
     runMode: "normal",
+    isHorizontalMode: true,
     speedMode: DEFAULT_FIRST_TIME_DROP_SPEED_MODE,
     focusPool: [],
     bestScoreAtStart: 0,

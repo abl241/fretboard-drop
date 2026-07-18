@@ -105,6 +105,7 @@ type DropGameAction =
       speedMode: DropSpeedMode;
       runMode?: "normal" | "focus";
       focusPool?: readonly DropFocusPoolCell[];
+      isHorizontalMode?: boolean;
     }
   | { type: "reset"; now: number }
   | { type: "tick"; now: number }
@@ -134,7 +135,7 @@ function resolveCorrectHit(
   };
 }
 
-function applyStreamSpawn(state: DropGameState, now: number): DropGameState {
+function applyScheduledStreamSpawn(state: DropGameState, now: number): DropGameState {
   const spawned = spawnStreamTarget({
     fallingTargets: state.fallingTargets,
     targetSeed: state.targetSeed,
@@ -164,6 +165,17 @@ function applyStreamSpawn(state: DropGameState, now: number): DropGameState {
   };
 }
 
+function applyHorizontalTargetSpawn(state: DropGameState, now: number): DropGameState {
+  if (state.fallingTargets.length > 0 || state.missReveal) return state;
+  return applyScheduledStreamSpawn(state, now);
+}
+
+function applyStreamSpawn(state: DropGameState, now: number): DropGameState {
+  return state.isHorizontalMode
+    ? applyHorizontalTargetSpawn(state, now)
+    : applyScheduledStreamSpawn(state, now);
+}
+
 function createFirstStreamTarget(
   now: number,
   stringSelection: DropStringSelection,
@@ -178,11 +190,12 @@ function createFirstStreamTarget(
     : makeDropTarget(1, now, 0, undefined, stringSelection, practiceContext, durationOptions);
 }
 
-function dropGameReducer(state: DropGameState, action: DropGameAction): DropGameState {
+export function dropGameReducer(state: DropGameState, action: DropGameAction): DropGameState {
   switch (action.type) {
     case "start": {
       const runMode = action.runMode ?? "normal";
       const focusPool = action.focusPool ?? [];
+      const isHorizontalMode = action.isHorizontalMode ?? true;
       const firstTarget = createFirstStreamTarget(
         action.now,
         action.stringSelection,
@@ -201,6 +214,7 @@ function dropGameReducer(state: DropGameState, action: DropGameAction): DropGame
         stringSelection: action.stringSelection,
         practiceContext: action.practiceContext,
         runMode,
+        isHorizontalMode,
         speedMode: action.speedMode,
         focusPool,
         bestScoreAtStart: action.bestScore,
@@ -697,7 +711,15 @@ export function FretboardDropGame({
     setBestFluencyScore(latestFluencyBest);
     completedRunTrackedRef.current = null;
     missProgressRecordedRef.current = null;
-    dispatch({ type: "start", now, bestScore: latestBest, stringSelection: runSelection, practiceContext: runPracticeContext, speedMode });
+    dispatch({
+      type: "start",
+      now,
+      bestScore: latestBest,
+      stringSelection: runSelection,
+      practiceContext: runPracticeContext,
+      speedMode,
+      isHorizontalMode: useHorizontalDeadlineStage,
+    });
     trackDropEvent("run_started", {
       ...getPracticeAnalyticsPayload(runSelection, runPracticeContext, DROP_RUN_MODE, speedMode),
       runId: createDropRunId(now),
@@ -738,6 +760,7 @@ export function FretboardDropGame({
       speedMode,
       runMode: "focus",
       focusPool,
+      isHorizontalMode: useHorizontalDeadlineStage,
     });
     trackDropEvent("run_started", {
       ...getPracticeAnalyticsPayload(runSelection, runPracticeContext, DROP_FOCUS_RUN_MODE, speedMode),
