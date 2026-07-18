@@ -1,0 +1,282 @@
+FRETBOARD DROP
+NAME THE NOTE FINAL VISUAL REFINEMENT PASS
+
+MODEL RECOMMENDATION
+Model: Luna
+Effort: Medium
+Speed: Fast
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+PRIMARY GOAL
+
+Make a small, low-risk final visual refinement pass to the active Name the Note gameplay screen.
+
+The current premium visual polish is working and has been committed and pushed. Do not redesign the mode. Do not alter gameplay. This task is only to tighten a few remaining visual details that still feel slightly busy or uneven.
+
+ARE WE SOLVING THE ROOT PROBLEM, OR JUST PATCHING THE CURRENT ARCHITECTURE?
+
+We are not repairing architecture here. The responsive layout and target-centered feedback model are already in place.
+
+This is a deliberate finishing pass on:
+
+- target scale and hierarchy
+- countdown-ring competition
+- timeout-message redundancy
+- fretboard tonal balance
+- answer-panel integration
+- secondary-label emphasis
+
+Keep the smallest clear solution.
+
+DESIGN PRINCIPLES
+
+STEVE KRUG
+
+- Remove redundant messages.
+- Keep the target and answer choice obvious.
+- Do not make the player process four versions of the same timeout message.
+- Preserve clear touch targets and readable feedback.
+
+STEVE JOBS
+
+- Refine proportion, hierarchy, and restraint.
+- The pick target should feel distinctive without feeling oversized or overdecorated.
+- Premium visual quality should come from balance and precision.
+- Do not add new effects.
+
+ROB PIKE AND KEN THOMPSON
+
+- Prefer tiny, localized edits.
+- Do not introduce new components, state, dependencies, or abstractions.
+- Reuse the current visual-state system.
+- Avoid broad rewrites.
+
+EDWARD TUFTE
+
+- Reduce redundant visual information.
+- Keep fret, string, target, timer, and answer information equally legible across the whole neck.
+- Reduce secondary-label prominence so the target remains dominant.
+
+FILES TO INSPECT FIRST
+
+Inspect only the relevant current files, likely:
+
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.tsx`
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.test.tsx`
+- `src/index.css`
+
+Do not broadly reread unrelated docs or modify unrelated modes.
+
+REQUIRED CHANGES
+
+1. SLIGHTLY ENLARGE THE PICK TARGET
+
+Increase the guitar-pick gem body by approximately 10 to 15%.
+
+Keep:
+
+- the exact same target cell
+- the same center point
+- the same string and fret alignment
+- the same countdown logic
+- the same hit and state behavior
+
+Adjust the ring and halo proportionally only as needed.
+
+Guardrails:
+
+- do not let the target cover too much of the fret cell
+- do not clip on strings 1 or 6
+- do not move or offset the target
+- do not change target geometry logic
+- do not change countdown timing
+
+2. REDUCE NORMAL-STATE RING COMPETITION
+
+In the normal idle state:
+
+- reduce countdown-ring opacity or visual weight slightly
+- keep the pick body as the dominant shape
+- keep the ring clearly readable
+- let the ring become more prominent as urgency increases
+- preserve amber urgency during the final second
+- preserve green and timeout states
+
+Also slightly reduce the visual weight of the inner black contact dot if it currently competes with the pick shape.
+
+Do not remove the ring.
+
+3. REMOVE TIMEOUT REDUNDANCY
+
+The timeout state currently communicates the answer through several simultaneous elements.
+
+Keep the clearest three:
+
+- timeout text such as `TIME'S UP · C`
+- correct note shown in the pick
+- correct answer button highlighted
+
+Remove or simplify the separate `TIME` badge in the answer panel.
+
+Preferred solution:
+
+- hide the badge during timeout resolution
+- or replace it with nothing during timeout
+- keep the numeric countdown badge during active play
+
+Do not remove the timeout text or correct-note reveal.
+
+4. SOFTEN RIGHT-SIDE FRETBOARD DARKNESS
+
+The current fretboard vignette or gradient becomes too dark near frets 9 to 11.
+
+Reduce that right-side darkening by approximately 20 to 30%.
+
+Goal:
+
+- preserve dimensional depth
+- preserve the warm wood character
+- keep frets 1 through 11 visually balanced
+- maintain equal legibility across the entire playable neck
+- keep the target as the strongest object
+
+Do not remove the overall depth treatment.
+
+Do not introduce image textures.
+
+5. TIGHTEN ANSWER-PANEL INTEGRATION
+
+The answer panel still feels slightly detached from the fretboard.
+
+Make small adjustments only:
+
+- reduce the vertical gap slightly
+- soften the panel outer border contrast
+- reduce any unnecessary top padding
+- preserve bounded width
+- preserve comfortable touch targets
+- preserve mobile fit
+- preserve A-G order
+
+Do not stretch the answer panel to full fretboard width.
+
+Do not change layout ownership or responsive architecture.
+
+6. QUIET SECONDARY LABELS
+
+Reduce the prominence of secondary labels such as:
+
+- inactive string numbers
+- supporting fret labels
+- any low-priority HUD text that competes with the target
+
+Keep:
+
+- active string number clearly visible
+- fret labels readable
+- Run Points, Streak, Best, and timer understandable
+- sufficient contrast for accessibility
+
+Do not make labels too faint on mobile.
+
+SCOPE GUARDRAILS
+
+Preserve all of the following:
+
+- target generation
+- shuffled deck behavior
+- note-answer logic
+- retry behavior
+- question duration
+- run duration
+- timeout reveal duration
+- scoring formula
+- streak rules
+- Fluency calculations
+- persistence
+- setup and results screens
+- keyboard controls
+- Free Play
+- Guided Learning
+- original Fretboard Drop mode
+- responsive layout
+- safe-area handling
+- proportional fret spacing
+- current target-centered countdown
+- current correct, wrong, and timeout behavior
+- reduced-motion support
+- current test coverage
+
+Do not add:
+
+- sound
+- haptics
+- particles
+- new animations
+- new dependencies
+- new state
+- new persistence
+- backend
+- analytics
+- Canvas
+- SwiftUI
+- image assets
+- browser automation
+- Playwright
+- screenshot testing
+- live-preview automation
+
+TEST REQUIREMENTS
+
+Update focused tests only if a semantic contract changes.
+
+Do not add brittle class-string tests.
+
+Useful checks:
+
+- target remains in the same target cell
+- timeout badge is absent or hidden during timeout
+- active numeric countdown remains during play
+- all A-G buttons remain ordered and accessible
+- no gameplay behavior changed
+- no timeout timing changed
+
+VALIDATION
+
+Do not use browser automation, Playwright, screenshot comparison, or live-preview automation. I will manually inspect the result.
+
+Run:
+
+- `pnpm run typecheck`
+- `pnpm run test`
+- `pnpm run build`
+
+Use repository equivalents if different.
+
+FINAL RESPONSE FORMAT
+
+Report:
+
+1. Files changed
+2. Pick-size adjustment
+3. Ring and contact-dot refinement
+4. Timeout redundancy removal
+5. Fretboard tonal rebalance
+6. Answer-panel integration
+7. Secondary-label changes
+8. What was deliberately preserved
+9. Typecheck, test, and build results
+10. Manual checks for the user
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if all requested code changes and checks are finished.
+
+Otherwise end with:
+
+TASK INCOMPLETE
+
+Then state the exact blocker or remaining work.

@@ -289,7 +289,7 @@ describe("NameTheNoteGame", () => {
 
     const targetKey = screen.getByTestId("name-note-target-cell").getAttribute("data-target-key");
     expect(screen.getByText("Time's up · A")).toBeInTheDocument();
-    expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("TIME");
+    expect(screen.queryByTestId("name-note-question-countdown")).not.toBeInTheDocument();
     expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "timeout");
     expect(screen.getByTestId("name-note-target-marker")).toHaveTextContent("A");
     expect(screen.getByRole("button", { name: "Answer A" })).toHaveClass("border-emerald-100");

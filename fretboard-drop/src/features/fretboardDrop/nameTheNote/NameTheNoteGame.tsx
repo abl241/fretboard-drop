@@ -785,7 +785,7 @@ function NameTheNoteRunScreen({
         </div>
       </div>
       {question ? (
-        <div className="flex min-h-0 flex-col items-center gap-2">
+      <div className="flex min-h-0 flex-col items-center gap-1.5">
           <NameTheNoteFretboard
             target={question.target}
             outcome={question.outcome}
@@ -860,9 +860,9 @@ function NameTheNoteFretboard({
       data-testid="name-note-fretboard"
       data-layout="responsive-six-row-grid"
     >
-      <div className="grid text-center font-mono text-[10px] font-bold text-amber-100/58 sm:text-xs" style={{ gridTemplateColumns: fretGridTemplateColumns }}>
+      <div className="grid text-center font-mono text-[10px] font-bold text-amber-100/48 sm:text-xs" style={{ gridTemplateColumns: fretGridTemplateColumns }}>
         <div />
-        <div className="text-[9px] uppercase text-cyan-100/80 sm:text-[10px]">OPEN</div>
+        <div className="text-[9px] uppercase text-cyan-100/70 sm:text-[10px]">OPEN</div>
         {frets.map((fret) => (
           <div
             key={fret}
@@ -895,7 +895,7 @@ function NameTheNoteFretboard({
             data-testid={`name-note-string-row-${stringIndex}`}
             data-string-gauge={getNameTheNoteStringGauge(stringIndex)}
           >
-            <div className={`relative z-10 pr-2 text-right text-sm font-black tabular-nums sm:text-base ${stringIndex === target.stringIndex ? "text-white" : "text-amber-100/34"}`}>
+            <div className={`relative z-10 pr-2 text-right text-sm font-black tabular-nums sm:text-base ${stringIndex === target.stringIndex ? "text-white" : "text-amber-100/24"}`}>
               {stringIndex + 1}
             </div>
             <TargetCell
@@ -979,7 +979,7 @@ function TargetCell({
       ) : null}
       {isTarget ? (
         <span
-          className={`name-note-target-ring absolute left-1/2 top-1/2 z-10 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full p-[3px] ${isUrgent ? "name-note-target-ring--urgent" : ""}`}
+          className={`name-note-target-ring absolute left-1/2 top-1/2 z-10 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full p-[3px] ${isUrgent ? "name-note-target-ring--urgent" : ""}`}
           style={ringStyle}
           data-testid="name-note-target-ring"
           data-countdown-fraction={ringFraction.toFixed(2)}
@@ -1028,17 +1028,19 @@ function AnswerPanel({
         : "Name this position";
 
   return (
-    <div className="name-note-answer-panel w-full max-w-[48rem] rounded-md border border-slate-700/50 bg-slate-950/72 p-2.5 text-center shadow-md">
+    <div className="name-note-answer-panel w-full max-w-[48rem] rounded-md border border-slate-700/50 bg-slate-950/72 px-2.5 pb-2.5 pt-2 text-center shadow-md">
       <div className="mx-auto flex max-w-[44rem] items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-slate-400 sm:text-sm">
         <span>{feedback}</span>
-        <span
-          className="rounded border border-cyan-100/20 bg-cyan-200/10 px-2 py-1 font-mono text-cyan-100"
-          aria-label={question.outcome === "timeout" ? `Correct note ${question.target.note}` : "Question time remaining"}
-          data-testid="name-note-question-countdown"
-          data-state={question.outcome === "timeout" ? "time" : "counting"}
-        >
-          {question.outcome === "timeout" ? "TIME" : `${Math.ceil(question.remainingQuestionMs / 1000)}s`}
-        </span>
+        {question.outcome === "timeout" ? null : (
+          <span
+            className="rounded border border-cyan-100/20 bg-cyan-200/10 px-2 py-1 font-mono text-cyan-100"
+            aria-label="Question time remaining"
+            data-testid="name-note-question-countdown"
+            data-state="counting"
+          >
+            {Math.ceil(question.remainingQuestionMs / 1000)}s
+          </span>
+        )}
       </div>
       <div
         className="name-note-answer-grid mx-auto mt-2 grid max-w-[44rem] grid-cols-7 gap-2"
