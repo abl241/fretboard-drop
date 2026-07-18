@@ -144,6 +144,8 @@ describe("NameTheNoteGame", () => {
     );
     expect(screen.getByTestId("name-note-fretboard")).toHaveAttribute("data-layout", "responsive-six-row-grid");
     expect(screen.getByTestId("name-note-neck")).toHaveAttribute("data-neck-taper", "none");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-shape", "pick-gem");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-position-lock", "centered");
     expect(screen.getAllByTestId(/name-note-string-row-/)).toHaveLength(6);
     expect(Number(screen.getByTestId("name-note-string-row-0").getAttribute("data-string-gauge"))).toBeLessThan(
       Number(screen.getByTestId("name-note-string-row-5").getAttribute("data-string-gauge")),
@@ -185,6 +187,13 @@ describe("NameTheNoteGame", () => {
 
     expect(targetRing).toHaveAttribute("data-countdown-fraction", "0.45");
     expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("2s");
+
+    act(() => {
+      advanceClock(1_000);
+    });
+
+    expect(targetRing).toHaveAttribute("data-urgency", "halo-pulse");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-position-lock", "centered");
   });
 
   it("renders an open-string target outside the numbered fretted area", () => {

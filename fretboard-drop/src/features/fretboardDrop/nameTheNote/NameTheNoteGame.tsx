@@ -761,7 +761,7 @@ function NameTheNoteRunScreen({
       data-testid="name-note-run-screen"
       data-layout="top-aligned-responsive-stack"
     >
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-slate-700/55 bg-slate-950/78 p-2 shadow-md sm:grid-cols-[auto_repeat(2,minmax(7rem,auto))_1fr_auto]">
+      <div className="name-note-hud grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-slate-700/55 bg-slate-950/78 p-2 shadow-md sm:grid-cols-[auto_repeat(2,minmax(7rem,auto))_1fr_auto]">
         <button
           type="button"
           onClick={onBack}
@@ -778,7 +778,7 @@ function NameTheNoteRunScreen({
           Best {bestScore}
         </div>
         <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-1">
-          <div className="flex h-10 min-w-24 items-center justify-center gap-2 rounded-md border border-cyan-200/20 bg-cyan-300/10 px-3 font-mono text-xl font-black text-cyan-50">
+          <div className="name-note-run-timer flex h-10 min-w-24 items-center justify-center gap-2 rounded-md border border-cyan-200/20 bg-cyan-300/10 px-3 font-mono text-xl font-black text-cyan-50">
             <Timer className="h-5 w-5 text-cyan-200" />
             {seconds}
           </div>
@@ -817,7 +817,7 @@ function RunStat({
   className?: string;
 }) {
   return (
-    <div className={`${className} h-10 min-w-24 items-center justify-between gap-3 rounded-md border border-slate-700/55 bg-slate-900/62 px-3`}>
+    <div className={`name-note-run-stat ${strong ? "name-note-run-stat--strong" : ""} ${className} h-10 min-w-24 items-center justify-between gap-3 rounded-md border border-slate-700/55 bg-slate-900/62 px-3`}>
       <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</span>
       <span className={`flex items-center gap-1 font-mono font-black text-white ${strong ? "text-2xl" : "text-xl"} ${celebrate ? "name-note-streak-value" : ""}`}>
         {icon}
@@ -883,7 +883,7 @@ function NameTheNoteFretboard({
         ))}
       </div>
       <div
-        className="mt-1 grid min-h-0 flex-1 grid-rows-6 rounded-sm border border-amber-100/16 bg-[linear-gradient(90deg,rgba(66,40,22,0.96),rgba(101,60,29,0.96)_54%,rgba(122,68,32,0.94))] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_-16px_30px_rgba(0,0,0,0.28)_inset]"
+        className="name-note-neck mt-1 grid min-h-0 flex-1 grid-rows-6 rounded-sm border border-amber-100/16 bg-[linear-gradient(90deg,rgba(66,40,22,0.96),rgba(101,60,29,0.96)_54%,rgba(122,68,32,0.94))] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_-16px_30px_rgba(0,0,0,0.28)_inset]"
         data-testid="name-note-neck"
         data-neck-taper="none"
       >
@@ -964,13 +964,13 @@ function TargetCell({
   } satisfies CSSProperties;
   return (
     <div
-      className={`relative z-10 flex h-full min-h-0 items-center justify-center ${isOpen ? "border-r-[6px] border-r-amber-100/90 bg-slate-950/20" : "border-l border-amber-100/34"}`}
+      className={`name-note-fret-cell relative z-10 flex h-full min-h-0 items-center justify-center ${isOpen ? "name-note-open-zone border-r-[6px] border-r-amber-100/90 bg-slate-950/20" : "border-l border-amber-100/34"}`}
       aria-label={isTarget ? `${getStringFocusLabel(target.stringIndex as DropStringIndex)} ${isOpen ? "open string" : `fret ${target.fret}`} target` : undefined}
       data-testid={isTarget ? "name-note-target-cell" : undefined}
       data-target-key={isTarget ? target.targetKey : undefined}
     >
       <span
-        className="absolute left-0 right-0 top-1/2 block -translate-y-1/2 rounded-full bg-gradient-to-b from-zinc-100/88 via-zinc-400/70 to-zinc-900/55 shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+        className="name-note-string absolute left-0 right-0 top-1/2 block -translate-y-1/2 rounded-full bg-gradient-to-b from-zinc-100/88 via-zinc-400/70 to-zinc-900/55 shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
         style={{ height: `${stringGauge}px` }}
       />
       {isOpen ? <span className="absolute bottom-0 top-0 right-0 w-1.5 rounded-full bg-amber-100 shadow-[0_0_10px_rgba(254,243,199,0.34)]" /> : null}
@@ -984,18 +984,22 @@ function TargetCell({
           data-testid="name-note-target-ring"
           data-countdown-fraction={ringFraction.toFixed(2)}
           data-urgent={isUrgent ? "true" : "false"}
+          data-urgency={isUrgent ? "halo-pulse" : "steady"}
         >
           <span
-            className={`name-note-target-marker relative flex h-full w-full items-center justify-center rounded-full border shadow-[0_0_18px_rgba(103,232,249,0.48)] ${markerTone} ${outcome === "correct" ? "name-note-target-marker--correct" : ""} ${outcome === "timeout" ? "name-note-target-marker--timeout" : ""}`}
+            className={`name-note-target-marker relative flex h-full w-full items-center justify-center border shadow-[0_0_18px_rgba(103,232,249,0.48)] ${markerTone} ${outcome === "correct" ? "name-note-target-marker--correct" : ""} ${outcome === "timeout" ? "name-note-target-marker--timeout" : ""}`}
             aria-label={`Target marker ${target.targetKey}${outcome === "timeout" && revealedCorrectNote ? `, correct note ${revealedCorrectNote}` : ""}`}
             data-testid="name-note-target-marker"
             data-interaction-enabled={interactionEnabled ? "true" : "false"}
             data-outcome={outcome}
+            data-shape="pick-gem"
+            data-position-lock="centered"
           >
+            <span className="name-note-target-specular" aria-hidden="true" />
             {outcome === "timeout" && revealedCorrectNote ? (
-              <span className="font-mono text-sm font-black text-slate-950">{revealedCorrectNote}</span>
+              <span className="relative z-10 font-mono text-sm font-black text-slate-950">{revealedCorrectNote}</span>
             ) : (
-              <span className="h-2 w-2 rounded-full bg-slate-950/82" aria-hidden="true" />
+              <span className="name-note-target-contact relative z-10 h-2 w-2 rounded-full bg-slate-950/82" aria-hidden="true" />
             )}
           </span>
           {outcome === "correct" && earnedPoints !== null ? (
@@ -1024,7 +1028,7 @@ function AnswerPanel({
         : "Name this position";
 
   return (
-    <div className="w-full max-w-[48rem] rounded-md border border-slate-700/50 bg-slate-950/72 p-2.5 text-center shadow-md">
+    <div className="name-note-answer-panel w-full max-w-[48rem] rounded-md border border-slate-700/50 bg-slate-950/72 p-2.5 text-center shadow-md">
       <div className="mx-auto flex max-w-[44rem] items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-slate-400 sm:text-sm">
         <span>{feedback}</span>
         <span
@@ -1037,7 +1041,7 @@ function AnswerPanel({
         </span>
       </div>
       <div
-        className="mx-auto mt-2 grid max-w-[44rem] grid-cols-7 gap-2"
+        className="name-note-answer-grid mx-auto mt-2 grid max-w-[44rem] grid-cols-7 gap-2"
         data-testid="name-note-answer-grid"
         data-layout="bounded-centered"
       >
