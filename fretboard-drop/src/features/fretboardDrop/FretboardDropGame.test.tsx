@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DROP_SPEED_MODE_STORAGE_KEY, getTargetProgress, writeBestDropScore } from "./dropGameUtils";
 import { appendCompletedRunToHistory } from "./dropRunHistory";
 import { FretboardDropGame } from "./FretboardDropGame";
-import { HorizontalDeadlineStage, getHorizontalDeadlinePickRightPercent } from "./HorizontalDeadlineStage";
+import {
+  DEADLINE_CONTACT_PERCENT,
+  HorizontalDeadlineStage,
+  PICK_START_CONTACT_PERCENT,
+  getHorizontalDeadlinePickContactPercent,
+} from "./HorizontalDeadlineStage";
 import {
   DROP_CELL_PROGRESS_STORAGE_KEY,
   LocalStorageCellProgressRepository,
@@ -179,6 +184,7 @@ describe("FretboardDropGame", () => {
   });
 
   it("maps the active pick position from existing target progress", () => {
+    vi.spyOn(performance, "now").mockReturnValue(1_500);
     const target = {
       id: 7,
       targetKey: "standard:0:5" as const,
@@ -209,12 +215,11 @@ describe("FretboardDropGame", () => {
     const pick = getHorizontalDeadlinePick();
     const travel = getHorizontalDeadlinePickTravel();
     expect(pick).toHaveAttribute("data-progress", progress.toFixed(3));
-    expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickRightPercent(progress).toFixed(2));
+    expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickContactPercent(progress).toFixed(2));
     expect(travel).toHaveClass("horizontal-deadline-pick-travel--active");
-    expect(travel.style.getPropertyValue("--pick-start-percent")).toBe("12%");
-    expect(travel.style.getPropertyValue("--pick-end-percent")).toBe("86%");
-    expect(travel.style.getPropertyValue("--pick-duration-ms")).toBe("1000ms");
-    expect(travel.style.left).toBe("");
+    expect(travel.style.getPropertyValue("--pick-contact-percent")).toBe(`${getHorizontalDeadlinePickContactPercent(progress)}%`);
+    expect(getHorizontalDeadlinePickContactPercent(0)).toBe(PICK_START_CONTACT_PERCENT);
+    expect(getHorizontalDeadlinePickContactPercent(1)).toBe(DEADLINE_CONTACT_PERCENT);
   });
 
   it("moves the normal-run horizontal pick from the reducer game clock through the deadline", () => {
@@ -848,7 +853,7 @@ describe("FretboardDropGame", () => {
     expect(screen.getAllByText("1").length).toBeGreaterThan(0);
     expect(getHorizontalDeadlinePick("resolved-correct")).toBeInTheDocument();
     expect(getHorizontalDeadlinePickTravel().dataset.targetId).not.toBe(firstTargetId);
-    expect(getHorizontalDeadlinePickTravel().style.left).toBe("");
+    expect(getHorizontalDeadlinePickTravel().style.getPropertyValue("--pick-contact-percent")).toBe("12%");
   });
 
   it("persists correct target-cell evidence on target resolution", async () => {
@@ -970,9 +975,9 @@ describe("FretboardDropGame", () => {
 
   it("shows the final miss reveal before completing the run", () => {
     vi.useFakeTimers();
-    let nextAnimationFrame: FrameRequestCallback | null = null;
+    let nextAnimationFrames: FrameRequestCallback[] = [];
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      nextAnimationFrame = callback;
+      nextAnimationFrames.push(callback);
       return 1;
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
@@ -983,7 +988,9 @@ describe("FretboardDropGame", () => {
 
     for (const expectedLives of ["2 lives", "1 lives"]) {
       act(() => {
-        nextAnimationFrame?.(performance.now() + 7_000);
+        const frames = nextAnimationFrames;
+        nextAnimationFrames = [];
+        frames.forEach((frame) => frame(performance.now() + 7_000));
       });
 
       expect(screen.getByLabelText(expectedLives)).toBeInTheDocument();
@@ -998,7 +1005,9 @@ describe("FretboardDropGame", () => {
     }
 
     act(() => {
-      nextAnimationFrame?.(performance.now() + 7_000);
+      const frames = nextAnimationFrames;
+      nextAnimationFrames = [];
+      frames.forEach((frame) => frame(performance.now() + 7_000));
     });
 
     expect(screen.getByLabelText("0 lives")).toBeInTheDocument();

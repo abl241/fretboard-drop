@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { DropPracticeContext, DropStageCue, DropStringSelection, DropTarget } from "./dropGameTypes";
 import { getPracticeLabel, getPromptTimeRemaining, getStringAccent, getTargetProgress } from "./dropGameUtils";
 
-const PICK_START_RIGHT_PERCENT = 12;
-const DEADLINE_RIGHT_PERCENT = 86;
+export const PICK_START_CONTACT_PERCENT = 12;
+export const DEADLINE_CONTACT_PERCENT = 86;
 
 type ResolvedPickSnapshot = {
   target: DropTarget;
   progress: number;
 };
 
-export function getHorizontalDeadlinePickRightPercent(progress: number): number {
-  return PICK_START_RIGHT_PERCENT + getTargetProgress({ startedAt: 0, durationMs: 1 }, progress) * (DEADLINE_RIGHT_PERCENT - PICK_START_RIGHT_PERCENT);
+export function getHorizontalDeadlinePickContactPercent(progress: number): number {
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  return PICK_START_CONTACT_PERCENT + clampedProgress * (DEADLINE_CONTACT_PERCENT - PICK_START_CONTACT_PERCENT);
 }
 
 export function HorizontalDeadlineStage({
@@ -71,12 +72,16 @@ export function HorizontalDeadlineStage({
         </div>
       ) : null}
       <div
-        className={`horizontal-deadline-line horizontal-deadline-line--${deadlineState} pointer-events-none absolute top-[20%] bottom-[18%] z-10 w-px`}
-        style={{ left: `${DEADLINE_RIGHT_PERCENT}%` }}
-        data-testid="horizontal-deadline-line"
+        className={`horizontal-deadline-gate horizontal-deadline-gate--${deadlineState} pointer-events-none absolute top-[20%] bottom-[18%] z-10`}
+        style={{ left: `${DEADLINE_CONTACT_PERCENT}%` }}
         data-state={deadlineState}
         aria-hidden="true"
-      />
+      >
+        <span className="horizontal-deadline-gate-arrival-zone" />
+        <span className="horizontal-deadline-line" data-testid="horizontal-deadline-line" data-state={deadlineState} />
+        <span className="horizontal-deadline-gate-cap horizontal-deadline-gate-cap--top" />
+        <span className="horizontal-deadline-gate-cap horizontal-deadline-gate-cap--bottom" />
+      </div>
       {activeTarget ? (
         <HorizontalDeadlinePick
           key={activeTarget.id}
@@ -125,17 +130,16 @@ function HorizontalDeadlinePick({
   isFinalSecond: boolean;
 }) {
   const accent = getStringAccent(target.stringIndex);
-  const rightEdgePercent = getHorizontalDeadlinePickRightPercent(progress);
+  const contactPercent = getHorizontalDeadlinePickContactPercent(progress);
   const sizePx = Math.max(64, Math.round(targetSizePx * 0.9));
   const isActive = state === "active";
+  const travelRef = useRef<HTMLDivElement>(null);
+  useActivePickTravel(travelRef, isActive ? target : null);
   const travelStyle: CSSProperties = {
-    "--pick-start-percent": `${PICK_START_RIGHT_PERCENT}%`,
-    "--pick-end-percent": `${DEADLINE_RIGHT_PERCENT}%`,
-    "--pick-duration-ms": `${target.durationMs}ms`,
+    "--pick-contact-percent": `${contactPercent}%`,
     width: sizePx,
     height: sizePx,
     color: accent.color,
-    ...(isActive ? {} : { left: `${rightEdgePercent}%` }),
   } as CSSProperties;
 
   return (
@@ -143,6 +147,7 @@ function HorizontalDeadlinePick({
       className={`horizontal-deadline-pick-travel horizontal-deadline-pick-travel--${state} pointer-events-none absolute top-1/2 z-20 ${
         isActive ? "horizontal-deadline-pick-travel--active" : ""
       }`}
+      ref={travelRef}
       style={travelStyle}
       data-testid="horizontal-deadline-pick-travel"
       data-state={state}
@@ -154,7 +159,7 @@ function HorizontalDeadlinePick({
         aria-hidden={state === "resolved-correct" ? "true" : undefined}
         data-testid="horizontal-deadline-pick"
         data-progress={progress.toFixed(3)}
-        data-position-percent={rightEdgePercent.toFixed(2)}
+        data-position-percent={contactPercent.toFixed(2)}
         data-state={state}
         data-final-second={isFinalSecond ? "true" : "false"}
       >
@@ -165,6 +170,37 @@ function HorizontalDeadlinePick({
       </div>
     </div>
   );
+}
+
+function useActivePickTravel(
+  travelRef: RefObject<HTMLDivElement | null>,
+  target: DropTarget | null,
+): void {
+  useLayoutEffect(() => {
+    const travelElement = travelRef.current;
+    if (!travelElement || !target) return undefined;
+
+    const applyPosition = () => {
+      const progress = getTargetProgress(target, performance.now());
+      const contactPercent = getHorizontalDeadlinePickContactPercent(progress);
+      travelElement.style.setProperty("--pick-contact-percent", `${contactPercent}%`);
+      const pickElement = travelElement.querySelector<HTMLElement>("[data-testid='horizontal-deadline-pick']");
+      if (pickElement) {
+        pickElement.dataset.progress = progress.toFixed(3);
+        pickElement.dataset.positionPercent = contactPercent.toFixed(2);
+      }
+    };
+
+    let frame = 0;
+    const advance = () => {
+      applyPosition();
+      frame = requestAnimationFrame(advance);
+    };
+
+    applyPosition();
+    frame = requestAnimationFrame(advance);
+    return () => cancelAnimationFrame(frame);
+  }, [target, travelRef]);
 }
 
 function MissImpact({
@@ -179,14 +215,14 @@ function MissImpact({
   isReducedMotion: boolean;
 }) {
   const accent = getStringAccent(target.stringIndex);
-  const rightEdgePercent = getHorizontalDeadlinePickRightPercent(progress);
+  const contactPercent = getHorizontalDeadlinePickContactPercent(progress);
   const sizePx = Math.max(64, Math.round(targetSizePx * 0.9));
 
   return (
     <div
       className="horizontal-deadline-impact pointer-events-none absolute top-1/2 z-20"
       style={{
-        left: `${rightEdgePercent}%`,
+        left: `${contactPercent}%`,
         width: sizePx,
         height: sizePx,
         color: accent.color,

@@ -1,0 +1,264 @@
+# Fretboard Drop: Unify Pick Travel Timing and Upgrade Deadline Gate
+
+## Recommended Codex settings
+Model: Terra
+Effort: Medium
+Speed: Normal
+
+## Goal
+
+Fix the horizontal pick so its visible position is always driven by the same authoritative gameplay timing used for hit, miss, and target expiration.
+
+Also replace the current plain vertical deadline line with a restrained, guitar-game-style hit gate that is visually clearer without adding clutter.
+
+Follow Pike principles:
+
+- one source of truth
+- no duplicated clocks
+- no arbitrary timing offsets
+- no broad refactor
+- simple, direct data flow
+- smallest robust solution
+
+## Confirm the current code first
+
+Before editing:
+
+1. Inspect the current checked-out branch and confirm it contains the native CSS pick travel implementation.
+2. Inspect:
+   - `src/features/fretboardDrop/FretboardDropGame.tsx`
+   - `src/features/fretboardDrop/HorizontalDeadlineStage.tsx`
+   - `src/features/fretboardDrop/FretboardDropGame.test.tsx`
+   - relevant Fretboard Drop CSS in `src/index.css`
+3. Confirm that gameplay timing is based on:
+   - `target.startedAt`
+   - `target.durationMs`
+   - `performance.now()`
+   - `getTargetProgress(...)`
+4. Confirm whether the visible pick currently starts a CSS animation when its wrapper mounts.
+
+If the checked-out code differs materially from this description, stop and report the exact discrepancy rather than guessing.
+
+## Root problem to remove
+
+The gameplay timeline begins at `target.startedAt`.
+
+A native CSS animation begins when the DOM element mounts.
+
+Those are separate time origins. The reducer can therefore remove a target when gameplay progress reaches 1 while the CSS animation is still short of the deadline. The visible disappearance point varies because React commit and browser scheduling delays vary.
+
+Do not patch this with duration changes, grace periods, delayed removal, arbitrary milliseconds, or moving the deadline.
+
+## Required architecture
+
+Use one authoritative timeline for both gameplay and rendering.
+
+### Preserve
+
+Keep reducer gameplay timing authoritative:
+
+- target creation timestamps
+- target duration
+- hit timing
+- miss timing
+- scoring
+- lives
+- spawning
+- focus practice behavior
+- speed modes
+- `performance.now()` timing domain
+
+### Replace
+
+Remove CSS-owned horizontal travel timing for the active pick.
+
+The active pick must not run an independent full-duration CSS animation from mount.
+
+Instead:
+
+1. Keep a DOM ref for the active pick travel wrapper.
+2. Use a small `requestAnimationFrame` loop scoped only to the active pick.
+3. On each frame:
+   - read `performance.now()`
+   - calculate progress using the existing `getTargetProgress(activeTarget, now)`
+   - calculate the visual position using the existing centralized horizontal-position helper
+   - update a CSS custom property or `transform: translate3d(...)` directly on the active pick element
+4. Do not put per-frame time or progress into React state.
+5. Do not dispatch reducer actions solely for visual movement.
+6. React should rerender only for actual game-state changes.
+7. Cancel the animation frame when:
+   - the target changes
+   - the target resolves
+   - the component unmounts
+8. On mount or target replacement, immediately set the pick to the correct position based on `performance.now()`, not to the start position.
+9. Returning from a background tab must immediately place the pick at the correct gameplay position.
+10. Reduced-motion mode must still show essential position changes. It may disable decorative glow, pulse, fade, or easing only.
+
+## Position semantics
+
+Make the geometry explicit and centralized.
+
+The target should have one defined contact point, preferably its leading edge, and that point must meet the hit gate exactly when progress reaches 1.
+
+Do not rely on ambiguous naming such as `rightEdgePercent` if the CSS property represents the element's left coordinate.
+
+Create or retain one helper that clearly expresses:
+
+- start contact position
+- deadline contact position
+- progress interpolation
+- target-width compensation, if required
+
+At progress 0:
+
+- the visible pick starts at the intended start location
+
+At progress 1:
+
+- the pick's defined contact edge aligns exactly with the gate strike line
+
+The visual gate position and pick endpoint must use the same shared constant or geometry source.
+
+## Resolved-state behavior
+
+Preserve the current correct-hit and miss visual feedback.
+
+For correct hits:
+
+- freeze the resolved visual at the actual hit progress
+- do not restart travel
+- do not snap it to another position
+
+For misses:
+
+- show the impact at the exact deadline contact position
+- the active pick must not disappear noticeably before reaching the gate
+
+Replacement targets must start from their correct current progress and must not inherit the previous target's transform.
+
+## Deadline gate visual upgrade
+
+Replace the plain one-pixel line with a restrained hit gate.
+
+Use a simple component or semantic CSS structure with:
+
+- one 2 px luminous strike line
+- a narrow, faint arrival zone behind or immediately before it, approximately 12 to 18 px wide
+- subtle top and bottom caps or brackets
+- restrained cyan glow in the idle state
+- a slightly brighter urgent state during the final second
+- a brief red or amber impact response on miss
+- no text label
+- no large gradients across the whole play field
+- no decorative clutter
+- no change to game layout dimensions
+
+The gate should feel deliberate and game-like, but still follow Tufte and Krug restraint.
+
+Use existing stage state where practical:
+
+- idle
+- urgent
+- miss
+
+Do not create a new gameplay system.
+
+## Tests
+
+Update or add focused tests that verify behavior, not only implementation details.
+
+At minimum cover:
+
+1. The visual position helper returns the start position at progress 0.
+2. The pick's defined contact edge equals the gate strike position at progress 1.
+3. A mounted target that is already partway through its duration begins at the corresponding visual position, not the start.
+4. Advancing time moves the visual transform forward.
+5. Near-deadline visual position is near the gate.
+6. Gameplay miss and visual endpoint use the same target duration and deadline geometry.
+7. Focus Practice preserves the chosen target while movement advances.
+8. Reduced motion still advances the pick.
+9. Correct hit after time advancement freezes at the actual hit position.
+10. Replacement targets do not inherit the prior target transform.
+11. Existing miss timing, life loss, correct/wrong behavior, scoring, and speed-mode tests continue to pass.
+
+Avoid fragile tests that depend on exact browser animation scheduling.
+
+Prefer testing pure geometry helpers plus the imperative position application contract.
+
+## Scope guardrails
+
+Do not change:
+
+- target generation
+- target durations
+- speed-mode values
+- scoring
+- lives
+- hit or miss rules
+- fretboard interaction
+- note selection
+- Focus Practice selection
+- results
+- persistence
+- sound
+- Name the Note
+- mobile layout structure
+- unrelated CSS
+- backend, auth, or database code
+
+Do not add:
+
+- a second animation clock
+- React per-frame state
+- arbitrary delay compensation
+- miss grace periods
+- browser animation libraries
+- broad animation abstractions
+
+## Verification
+
+Run:
+
+- typecheck
+- relevant tests
+- full test suite
+- production build
+
+Do not use browser automation, Playwright, screenshot testing, or live-preview testing. The user will manually verify the visual result.
+
+Manual verification checklist to report:
+
+- normal run pick reaches the gate before resolving
+- Focus Practice pick reaches the gate before resolving
+- all tempo modes travel at visibly different speeds
+- misses occur at the gate
+- correct hits freeze at the hit location
+- wrong clicks behave normally
+- tab return resynchronizes immediately
+- reduced motion still travels
+- replacement picks start correctly
+- mobile layouts remain usable
+- the new gate is clearer but not visually noisy
+
+## Final response
+
+Summarize:
+
+- root cause confirmed
+- files changed
+- timing architecture used
+- gate visual changes
+- tests and checks run
+- manual checks still recommended
+
+End with:
+
+`TASK COMPLETE`
+
+Only use that marker if all requested code changes and checks are complete.
+
+Otherwise end with:
+
+`TASK INCOMPLETE`
+
+and list the exact remaining work or blocker.

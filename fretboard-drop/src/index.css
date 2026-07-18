@@ -319,21 +319,54 @@ button {
     0 18px 42px rgba(0, 0, 0, 0.18);
 }
 
+.horizontal-deadline-gate {
+  width: 2px;
+  color: rgba(103, 232, 249, 0.78);
+  transition: color 120ms ease;
+}
+
+.horizontal-deadline-gate-arrival-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  background: rgba(34, 211, 238, 0.07);
+  border-left: 1px solid rgba(103, 232, 249, 0.1);
+}
+
 .horizontal-deadline-line {
-  background: rgba(148, 163, 184, 0.34);
-  box-shadow: 0 0 10px rgba(148, 163, 184, 0.06);
-  transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease;
+  position: absolute;
+  inset: 0;
+  width: 2px;
+  background: currentColor;
+  box-shadow: 0 0 12px rgba(103, 232, 249, 0.28);
 }
 
-.horizontal-deadline-line--urgent {
-  background: rgba(224, 242, 254, 0.62);
-  box-shadow: 0 0 14px rgba(103, 232, 249, 0.16);
+.horizontal-deadline-gate-cap {
+  position: absolute;
+  left: -4px;
+  width: 10px;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 0 8px rgba(103, 232, 249, 0.22);
 }
 
-.horizontal-deadline-line--miss {
-  animation: horizontal-deadline-line-miss 260ms ease-out both;
+.horizontal-deadline-gate-cap--top {
+  top: 0;
+}
+
+.horizontal-deadline-gate-cap--bottom {
+  bottom: 0;
+}
+
+.horizontal-deadline-gate--urgent {
+  color: rgba(224, 242, 254, 0.98);
+}
+
+.horizontal-deadline-gate--miss {
+  color: rgba(251, 146, 60, 0.98);
+  animation: horizontal-deadline-gate-miss 260ms ease-out both;
 }
 
 .horizontal-deadline-pick-travel,
@@ -341,8 +374,8 @@ button {
   transform: translate3d(-100%, -50%, 0);
 }
 
-.horizontal-deadline-pick-travel--active {
-  animation: horizontal-deadline-travel var(--pick-duration-ms) linear both;
+.horizontal-deadline-pick-travel {
+  left: var(--pick-contact-percent);
 }
 
 .horizontal-deadline-pick {
@@ -433,16 +466,6 @@ button {
   }
 }
 
-@keyframes horizontal-deadline-travel {
-  from {
-    left: var(--pick-start-percent);
-  }
-
-  to {
-    left: var(--pick-end-percent);
-  }
-}
-
 @keyframes horizontal-deadline-final-second {
   0%,
   100% {
@@ -470,15 +493,13 @@ button {
   }
 }
 
-@keyframes horizontal-deadline-line-miss {
+@keyframes horizontal-deadline-gate-miss {
   0% {
-    background: rgba(251, 146, 60, 0.92);
-    box-shadow: 0 0 18px rgba(251, 146, 60, 0.32);
+    color: rgba(251, 146, 60, 0.98);
   }
 
   100% {
-    background: rgba(148, 163, 184, 0.34);
-    box-shadow: 0 0 10px rgba(148, 163, 184, 0.06);
+    color: rgba(251, 146, 60, 0.62);
   }
 }
 
