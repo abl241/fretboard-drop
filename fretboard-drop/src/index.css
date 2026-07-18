@@ -336,16 +336,19 @@ button {
   animation: horizontal-deadline-line-miss 260ms ease-out both;
 }
 
-.horizontal-deadline-pick,
+.horizontal-deadline-pick-travel,
 .horizontal-deadline-impact {
   transform: translate3d(-100%, -50%, 0);
+}
+
+.horizontal-deadline-pick-travel--active {
+  animation: horizontal-deadline-travel var(--pick-duration-ms) linear both;
 }
 
 .horizontal-deadline-pick {
   filter:
     drop-shadow(0 0 18px rgba(251, 191, 36, 0.28))
     drop-shadow(0 0 8px currentColor);
-  transition: left 60ms linear;
 }
 
 .horizontal-deadline-pick--resolved-correct {
@@ -421,12 +424,22 @@ button {
 @keyframes horizontal-deadline-correct-fade {
   from {
     opacity: 0.92;
-    transform: translate3d(-100%, -50%, 0) scale(1);
+    transform: scale(1);
   }
 
   to {
     opacity: 0;
-    transform: translate3d(-100%, -50%, 0) scale(0.94);
+    transform: scale(0.94);
+  }
+}
+
+@keyframes horizontal-deadline-travel {
+  from {
+    left: var(--pick-start-percent);
+  }
+
+  to {
+    left: var(--pick-end-percent);
   }
 }
 
@@ -483,13 +496,8 @@ button {
     transition: none;
   }
 
-  .horizontal-deadline-pick {
-    transition: none;
-  }
-
   .horizontal-deadline-pick--resolved-correct {
     animation-duration: 120ms;
-    transform: translate3d(-100%, -50%, 0);
   }
 
   .horizontal-deadline-pick--final-second {

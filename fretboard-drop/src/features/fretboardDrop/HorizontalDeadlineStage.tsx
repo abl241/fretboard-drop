@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { DropPracticeContext, DropStageCue, DropStringSelection, DropTarget } from "./dropGameTypes";
 import { getPracticeLabel, getPromptTimeRemaining, getStringAccent, getTargetProgress } from "./dropGameUtils";
 
@@ -79,6 +79,7 @@ export function HorizontalDeadlineStage({
       />
       {activeTarget ? (
         <HorizontalDeadlinePick
+          key={activeTarget.id}
           target={activeTarget}
           progress={activeProgress}
           targetSizePx={targetSizePx}
@@ -126,28 +127,42 @@ function HorizontalDeadlinePick({
   const accent = getStringAccent(target.stringIndex);
   const rightEdgePercent = getHorizontalDeadlinePickRightPercent(progress);
   const sizePx = Math.max(64, Math.round(targetSizePx * 0.9));
+  const isActive = state === "active";
+  const travelStyle: CSSProperties = {
+    "--pick-start-percent": `${PICK_START_RIGHT_PERCENT}%`,
+    "--pick-end-percent": `${DEADLINE_RIGHT_PERCENT}%`,
+    "--pick-duration-ms": `${target.durationMs}ms`,
+    width: sizePx,
+    height: sizePx,
+    color: accent.color,
+    ...(isActive ? {} : { left: `${rightEdgePercent}%` }),
+  } as CSSProperties;
 
   return (
     <div
-      className={`horizontal-deadline-pick horizontal-deadline-pick--${state} ${isFinalSecond ? "horizontal-deadline-pick--final-second" : ""} pointer-events-none absolute top-1/2 z-20 flex items-center justify-center`}
-      style={{
-        left: `${rightEdgePercent}%`,
-        width: sizePx,
-        height: sizePx,
-        color: accent.color,
-      }}
-      aria-label={state === "active" ? `Note prompt ${target.note} (active)` : undefined}
-      aria-hidden={state === "resolved-correct" ? "true" : undefined}
-      data-testid="horizontal-deadline-pick"
-      data-progress={progress.toFixed(3)}
-      data-position-percent={rightEdgePercent.toFixed(2)}
+      className={`horizontal-deadline-pick-travel horizontal-deadline-pick-travel--${state} pointer-events-none absolute top-1/2 z-20 ${
+        isActive ? "horizontal-deadline-pick-travel--active" : ""
+      }`}
+      style={travelStyle}
+      data-testid="horizontal-deadline-pick-travel"
       data-state={state}
-      data-final-second={isFinalSecond ? "true" : "false"}
+      data-target-id={target.id}
     >
-      <span className="horizontal-deadline-pick-body absolute inset-0" aria-hidden="true" />
-      <span className="horizontal-deadline-pick-note relative z-10 font-black leading-none text-slate-950">
-        {target.note}
-      </span>
+      <div
+        className={`horizontal-deadline-pick horizontal-deadline-pick--${state} ${isFinalSecond ? "horizontal-deadline-pick--final-second" : ""} flex h-full w-full items-center justify-center`}
+        aria-label={state === "active" ? `Note prompt ${target.note} (active)` : undefined}
+        aria-hidden={state === "resolved-correct" ? "true" : undefined}
+        data-testid="horizontal-deadline-pick"
+        data-progress={progress.toFixed(3)}
+        data-position-percent={rightEdgePercent.toFixed(2)}
+        data-state={state}
+        data-final-second={isFinalSecond ? "true" : "false"}
+      >
+        <span className="horizontal-deadline-pick-body absolute inset-0" aria-hidden="true" />
+        <span className="horizontal-deadline-pick-note relative z-10 font-black leading-none text-slate-950">
+          {target.note}
+        </span>
+      </div>
     </div>
   );
 }

@@ -33,6 +33,10 @@ function getHorizontalDeadlinePick(state = "active"): HTMLElement {
   return screen.getAllByTestId("horizontal-deadline-pick").find((pick) => pick.getAttribute("data-state") === state)!;
 }
 
+function getHorizontalDeadlinePickTravel(state = "active"): HTMLElement {
+  return screen.getAllByTestId("horizontal-deadline-pick-travel").find((pick) => pick.getAttribute("data-state") === state)!;
+}
+
 function togglePracticeNote(note: string): void {
   fireEvent.click(getPracticeNoteButton(note));
 }
@@ -203,8 +207,80 @@ describe("FretboardDropGame", () => {
     );
 
     const pick = getHorizontalDeadlinePick();
+    const travel = getHorizontalDeadlinePickTravel();
     expect(pick).toHaveAttribute("data-progress", progress.toFixed(3));
     expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickRightPercent(progress).toFixed(2));
+    expect(travel).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(travel.style.getPropertyValue("--pick-start-percent")).toBe("12%");
+    expect(travel.style.getPropertyValue("--pick-end-percent")).toBe("86%");
+    expect(travel.style.getPropertyValue("--pick-duration-ms")).toBe("1000ms");
+    expect(travel.style.left).toBe("");
+  });
+
+  it("moves the normal-run horizontal pick from the reducer game clock through the deadline", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    const startPick = getHorizontalDeadlinePick();
+    expect(getHorizontalDeadlinePickTravel()).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(startPick).toHaveAttribute("data-progress", "0.000");
+    expect(startPick).toHaveAttribute("data-position-percent", "12.00");
+
+    now.mockReturnValue(4_000);
+    act(() => {
+      nextAnimationFrame?.(4_000);
+    });
+    const middlePick = getHorizontalDeadlinePick();
+    const middleProgress = Number(middlePick.dataset.progress);
+    expect(middleProgress).toBeGreaterThan(0);
+    expect(Number(middlePick.dataset.positionPercent)).toBeGreaterThan(12);
+
+    now.mockReturnValue(7_900);
+    act(() => {
+      nextAnimationFrame?.(7_900);
+    });
+    const deadlinePick = getHorizontalDeadlinePick();
+    expect(Number(deadlinePick.dataset.progress)).toBeGreaterThan(middleProgress);
+    expect(Number(deadlinePick.dataset.positionPercent)).toBeGreaterThan(80);
+  });
+
+  it("moves the Focus Practice pick from the reducer game clock while retaining the selected pool target", async () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    await seedWeakFocusCell();
+    render(<FretboardDropGame />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stats" }));
+    expect(await screen.findByText("1 eligible cell found. Using all of them.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Practice weakest" }));
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
+
+    const startPick = getHorizontalDeadlinePick();
+    const startProgress = Number(startPick.dataset.progress);
+    const startPosition = Number(startPick.dataset.positionPercent);
+    now.mockReturnValue(4_000);
+    act(() => {
+      nextAnimationFrame?.(4_000);
+    });
+
+    const movingPick = getHorizontalDeadlinePick();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
+    expect(getHorizontalDeadlinePickTravel()).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(Number(movingPick.dataset.progress)).toBeGreaterThan(startProgress);
+    expect(Number(movingPick.dataset.positionPercent)).toBeGreaterThan(startPosition);
   });
 
   it("uses compact pick sizing in phone landscape while keeping the deadline visible", () => {
@@ -219,7 +295,7 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     expect(screen.getByTestId("horizontal-deadline-line")).toBeInTheDocument();
-    expect(getHorizontalDeadlinePick()).toHaveStyle({ width: "65px", height: "65px" });
+    expect(getHorizontalDeadlinePickTravel()).toHaveStyle({ width: "65px", height: "65px" });
   });
 
   it("marks the horizontal stage reduced-motion fallback when requested", () => {
@@ -234,6 +310,37 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     expect(screen.getByTestId("horizontal-deadline-stage")).toHaveAttribute("data-motion", "reduced");
+  });
+
+  it("keeps horizontal pick travel active when reduced motion is requested", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    const startPick = getHorizontalDeadlinePick();
+    const startPosition = Number(startPick.dataset.positionPercent);
+
+    now.mockReturnValue(4_000);
+    act(() => {
+      nextAnimationFrame?.(4_000);
+    });
+
+    const movingPick = getHorizontalDeadlinePick();
+    expect(screen.getByTestId("horizontal-deadline-stage")).toHaveAttribute("data-motion", "reduced");
+    expect(getHorizontalDeadlinePickTravel()).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(Number(movingPick.dataset.positionPercent)).toBeGreaterThan(startPosition);
   });
 
   it("switches Stats metrics and keeps no-data cells neutral", async () => {
@@ -718,15 +825,30 @@ describe("FretboardDropGame", () => {
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
-  it("keeps scoring on correct fret clicks and fades the resolved pick", () => {
+  it("keeps scoring on correct fret clicks after the pick advances and fades the resolved pick", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     render(<FretboardDropGame />);
 
     selectAOnly();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    const firstTargetId = getHorizontalDeadlinePickTravel().dataset.targetId;
+    now.mockReturnValue(3_000);
+    act(() => {
+      nextAnimationFrame?.(3_000);
+    });
+    expect(Number(getHorizontalDeadlinePick().dataset.progress)).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
 
     expect(screen.getAllByText("1").length).toBeGreaterThan(0);
     expect(getHorizontalDeadlinePick("resolved-correct")).toBeInTheDocument();
+    expect(getHorizontalDeadlinePickTravel().dataset.targetId).not.toBe(firstTargetId);
+    expect(getHorizontalDeadlinePickTravel().style.left).toBe("");
   });
 
   it("persists correct target-cell evidence on target resolution", async () => {

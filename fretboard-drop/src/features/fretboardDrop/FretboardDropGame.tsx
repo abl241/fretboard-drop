@@ -443,25 +443,23 @@ export function FretboardDropGame({
   const [showStats, setShowStats] = useState(false);
   const [noteSoundEnabled, setNoteSoundEnabled] = useState(readNoteSoundEnabled);
   const [state, dispatch] = useReducer(dropGameReducer, undefined, () => createInitialDropState(performance.now()));
-  const [animationNow, setAnimationNow] = useState(() => performance.now());
   const promptSizePx = useDropPromptSizePx();
   const isWarmSurface = state.status === "start" || state.status === "complete";
   const completedRunTrackedRef = useRef<number | null>(null);
   const missProgressRecordedRef = useRef<number | null>(null);
 
-  const animationTime = state.status === "playing" ? animationNow : state.now;
   const inputLocked = state.missReveal !== null;
   const activeTarget = useMemo(
-    () => getActiveFallingTarget(state.fallingTargets, animationTime),
-    [animationTime, state.fallingTargets],
+    () => getActiveFallingTarget(state.fallingTargets, state.now),
+    [state.fallingTargets, state.now],
   );
   const playableTarget = useMemo(
-    () => getPlayableFallingTarget(state.fallingTargets, animationTime, inputLocked),
-    [animationTime, inputLocked, state.fallingTargets],
+    () => getPlayableFallingTarget(state.fallingTargets, state.now, inputLocked),
+    [inputLocked, state.fallingTargets, state.now],
   );
   const visibleTargetContexts = useMemo(
-    () => getFallingTargetVisibleContexts(state.fallingTargets, animationTime, playableTarget?.id ?? null),
-    [animationTime, playableTarget?.id, state.fallingTargets],
+    () => getFallingTargetVisibleContexts(state.fallingTargets, state.now, playableTarget?.id ?? null),
+    [playableTarget?.id, state.fallingTargets, state.now],
   );
   const result = useMemo<DropGameResult | null>(() => {
     if (state.status !== "complete") return null;
@@ -514,7 +512,6 @@ export function FretboardDropGame({
 
     let frame = 0;
     const tick = (now: number) => {
-      setAnimationNow(now);
       dispatch({ type: "tick", now });
       frame = requestAnimationFrame(tick);
     };
@@ -698,7 +695,6 @@ export function FretboardDropGame({
     setPracticeContext(runPracticeContext);
     setBestScore(latestBest);
     setBestFluencyScore(latestFluencyBest);
-    setAnimationNow(now);
     completedRunTrackedRef.current = null;
     missProgressRecordedRef.current = null;
     dispatch({ type: "start", now, bestScore: latestBest, stringSelection: runSelection, practiceContext: runPracticeContext, speedMode });
@@ -731,7 +727,6 @@ export function FretboardDropGame({
     setPracticeContext(runPracticeContext);
     setBestScore(latestBest);
     setBestFluencyScore(latestFluencyBest);
-    setAnimationNow(now);
     completedRunTrackedRef.current = null;
     missProgressRecordedRef.current = null;
     dispatch({
@@ -766,7 +761,6 @@ export function FretboardDropGame({
     const now = performance.now();
     setShowQuickPeekNotes(false);
     setShowStats(false);
-    setAnimationNow(now);
     missProgressRecordedRef.current = null;
     dispatch({ type: "reset", now });
   }
@@ -784,7 +778,6 @@ export function FretboardDropGame({
         recordCellProgressSafely(() => recordWrongTargetCellProgress(playableTarget, fret, new Date()));
       }
     }
-    setAnimationNow(now);
     dispatch({
       type: "fret-click",
       now,
@@ -848,7 +841,6 @@ export function FretboardDropGame({
                 const now = performance.now();
                 setShowQuickPeekNotes(false);
                 setShowStats(true);
-                setAnimationNow(now);
                 missProgressRecordedRef.current = null;
                 dispatch({ type: "reset", now });
               }}
@@ -893,7 +885,7 @@ export function FretboardDropGame({
                   <HorizontalDeadlineStage
                     cue={state.stageCue}
                     fallingTargets={state.fallingTargets}
-                    animationTime={animationTime}
+                    animationTime={state.now}
                     activeTargetId={playableTarget?.id ?? null}
                     combo={state.combo}
                     stringSelection={state.stringSelection}
@@ -904,7 +896,7 @@ export function FretboardDropGame({
                   <DropStage
                     cue={state.stageCue}
                     fallingTargets={state.fallingTargets}
-                    animationTime={animationTime}
+                    animationTime={state.now}
                     activeTargetId={playableTarget?.id ?? null}
                     combo={state.combo}
                     stringSelection={state.stringSelection}
