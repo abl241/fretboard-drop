@@ -20,6 +20,31 @@ body {
   background: #080a0f;
 }
 
+.name-note-shell {
+  min-block-size: var(--fretboard-drop-content-height, 100vh);
+  min-block-size: var(--fretboard-drop-content-height, 100dvh);
+  padding-block: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.name-note-surface,
+.name-note-content {
+  min-block-size: inherit;
+}
+
+.name-note-surface {
+  display: flex;
+}
+
+.name-note-fretboard {
+  block-size: clamp(15.5rem, 43dvh, 20rem);
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .name-note-fretboard {
+    block-size: clamp(10.5rem, 43dvh, 14rem);
+  }
+}
+
 button {
   font: inherit;
 }

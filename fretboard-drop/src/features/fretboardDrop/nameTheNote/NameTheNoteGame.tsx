@@ -493,12 +493,12 @@ export function NameTheNoteGame({
   }
 
   return (
-    <div className="name-note-shell min-h-[calc(100vh-1px)] bg-[#080a0f] text-slate-50">
-      <div className="min-h-[calc(100vh-1px)] bg-[radial-gradient(circle_at_50%_0%,rgba(14,165,233,0.16),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(245,158,11,0.14),transparent_40%)]">
+    <div className="name-note-shell bg-[#080a0f] text-slate-50">
+      <div className="name-note-surface bg-[radial-gradient(circle_at_50%_0%,rgba(14,165,233,0.16),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(245,158,11,0.14),transparent_40%)]">
         <div
-          className={`mx-auto flex min-h-[calc(100vh-1px)] flex-col ${
+          className={`name-note-content mx-auto flex w-full flex-1 flex-col ${
             state.status === "playing"
-              ? "max-w-[min(100vw,100rem)] px-1.5 py-2 sm:px-3"
+              ? "max-w-[min(100vw,100rem)] px-2 sm:px-3"
               : "max-w-7xl px-3 py-3 sm:px-5 sm:py-4"
           }`}
         >
@@ -753,7 +753,11 @@ function NameTheNoteRunScreen({
   const seconds = Math.ceil(state.timeLeftMs / 1000);
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-[88rem] flex-1 flex-col justify-center gap-2 py-2">
+    <div
+      className="mx-auto flex min-h-0 w-full max-w-[88rem] flex-1 flex-col gap-2 py-2"
+      data-testid="name-note-run-screen"
+      data-layout="top-aligned-responsive-stack"
+    >
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-slate-700/55 bg-slate-950/78 p-2 shadow-md sm:grid-cols-[auto_repeat(2,minmax(7rem,auto))_1fr_auto]">
         <button
           type="button"
@@ -841,8 +845,9 @@ function NameTheNoteFretboard({
 
   return (
     <div
-      className="h-[282px] w-full overflow-hidden rounded-md border border-cyan-200/14 bg-slate-950/28 p-2 shadow-[0_10px_28px_rgba(0,0,0,0.22)] sm:h-[318px] sm:p-2.5"
+      className="name-note-fretboard flex w-full flex-col rounded-md border border-cyan-200/14 bg-slate-950/28 p-2 shadow-[0_10px_28px_rgba(0,0,0,0.22)] sm:p-2.5"
       data-testid="name-note-fretboard"
+      data-layout="responsive-six-row-grid"
     >
       <div className="grid text-center font-mono text-[10px] font-bold text-amber-100/58 sm:text-xs" style={{ gridTemplateColumns: fretGridTemplateColumns }}>
         <div />
@@ -867,15 +872,14 @@ function NameTheNoteFretboard({
         ))}
       </div>
       <div
-        className="mt-1 grid h-[calc(100%-2rem)] grid-rows-6 overflow-hidden bg-[linear-gradient(90deg,rgba(66,40,22,0.96),rgba(101,60,29,0.96)_54%,rgba(122,68,32,0.94))] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_-16px_30px_rgba(0,0,0,0.28)_inset]"
-        style={{ clipPath: "polygon(0 5%, 100% 0, 100% 100%, 0 95%)" }}
+        className="mt-1 grid min-h-0 flex-1 grid-rows-6 rounded-sm border border-amber-100/16 bg-[linear-gradient(90deg,rgba(66,40,22,0.96),rgba(101,60,29,0.96)_54%,rgba(122,68,32,0.94))] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_-16px_30px_rgba(0,0,0,0.28)_inset]"
         data-testid="name-note-neck"
-        data-neck-taper="nut-90-to-100"
+        data-neck-taper="none"
       >
         {strings.map((stringIndex) => (
           <div
             key={stringIndex}
-            className="relative grid min-h-[38px] items-center overflow-visible sm:min-h-[44px]"
+            className="relative grid min-h-0 items-center"
             style={{ gridTemplateColumns: fretGridTemplateColumns }}
             data-testid={`name-note-string-row-${stringIndex}`}
             data-string-gauge={getNameTheNoteStringGauge(stringIndex)}
@@ -931,7 +935,7 @@ function TargetCell({
   const stringGauge = getNameTheNoteStringGauge(stringIndex);
   return (
     <div
-      className={`relative z-10 flex h-full min-h-[38px] items-center justify-center sm:min-h-[44px] ${isOpen ? "border-r-[6px] border-r-amber-100/90 bg-slate-950/20" : "border-l border-amber-100/34"}`}
+      className={`relative z-10 flex h-full min-h-0 items-center justify-center ${isOpen ? "border-r-[6px] border-r-amber-100/90 bg-slate-950/20" : "border-l border-amber-100/34"}`}
       aria-label={isTarget ? `${getStringFocusLabel(target.stringIndex as DropStringIndex)} ${isOpen ? "open string" : `fret ${target.fret}`} target` : undefined}
       data-testid={isTarget ? "name-note-target-cell" : undefined}
       data-target-key={isTarget ? target.targetKey : undefined}

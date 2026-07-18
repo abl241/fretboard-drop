@@ -1,0 +1,403 @@
+FRETBOARD DROP
+NAME THE NOTE MOBILE APP STORE LAYOUT POLISH
+
+MODEL RECOMMENDATION
+Model: Terra
+Effort: High
+Speed: Deliberate
+
+Read and execute this prompt from the repository's prompts or fretboard-prompts folder.
+
+PRIMARY GOAL
+
+Fix the active Name the Note gameplay screen so it looks intentional, polished, and professional on small iPhone screens and remains strong on larger phones.
+
+The current screenshot shows several connected problems:
+
+1. The active gameplay area leaves a very large blank region above the HUD.
+2. The fretboard is clipped or compressed near its lower edge on smaller screens.
+3. Targets on the outer strings, especially string 1 and string 6, can look visually offset even when logically centered.
+4. The fretboard uses fixed heights, minimum row heights, a hard-coded height subtraction, hidden overflow, and a trapezoid clip that do not remain geometrically consistent across screen sizes.
+5. The Name the Note component appears to claim a full viewport height even when it is rendered below an existing app header or navigation region.
+6. The result feels like a desktop web layout squeezed into a phone rather than a deliberately composed mobile game screen.
+
+ARE WE SOLVING THE ROOT PROBLEM, OR JUST PATCHING THE CURRENT ARCHITECTURE?
+
+Solve the root problem.
+
+Do not merely increase the current 282px or 318px fretboard height, reduce the marker size, or add device-specific offsets. Those would hide the issue on one screen while leaving the layout fragile elsewhere.
+
+The root problem is the mobile layout model and the mismatch between:
+
+- viewport ownership
+- available vertical space
+- fretboard container sizing
+- six string-row geometry
+- outer-string target clearance
+- decorative taper clipping
+- responsive HUD and answer-control sizing
+
+DESIGN PRINCIPLES
+
+Apply these principles throughout the implementation.
+
+STEVE KRUG
+
+- The next action must be obvious.
+- The player should immediately understand the active target and available answers.
+- Do not make the player interpret accidental spacing, clipping, or ambiguous alignment.
+- Remove wasted space that does not support gameplay.
+- Preserve large, comfortable touch targets.
+- The fretboard should be the clear visual center of the screen.
+
+STEVE JOBS
+
+- The screen should feel intentionally composed, not merely technically responsive.
+- Use restraint, hierarchy, and precise proportions.
+- Keep the current dark arcade identity, cyan target, warm fretboard, and strong contrast.
+- Do fewer things better.
+- Polish should come from geometry, spacing, alignment, and coherence rather than extra decoration.
+- The first minute should feel premium and delightful.
+
+ROB PIKE AND KEN THOMPSON
+
+- Prefer the smallest clear solution.
+- Use simple layout rules that are easy to reason about.
+- Avoid device-specific magic numbers wherever possible.
+- Do not add another renderer, layout framework, state system, or abstraction layer.
+- Keep game logic separate from presentation.
+- Make the responsive behavior predictable and maintainable.
+- Do not overcomplicate.
+
+EDWARD TUFTE
+
+- Maximize useful visual information.
+- Minimize visual noise and dead space.
+- The target, string, fret, timer, score, and answer choices should remain immediately legible.
+- Decorative elements must not compete with or distort the musical information.
+
+FILES TO INSPECT FIRST
+
+Inspect the current repository and confirm exact paths before editing. Likely files include:
+
+- src/features/fretboardDrop/nameTheNote/NameTheNoteGame.tsx
+- any shared app shell, mobile shell, header, or safe-area layout component used by this screen
+- any global CSS or Tailwind entry file affecting viewport height, safe areas, or overflow
+- existing Name the Note tests
+- any Capacitor or iOS-specific viewport configuration
+
+Do not broadly reread unrelated documentation or redesign other modes.
+
+CURRENT TECHNICAL RISKS TO VERIFY
+
+The current implementation appears to include some or all of the following:
+
+- outer Name the Note wrappers using min-height based on 100vh
+- an active run container using justify-center
+- a fretboard wrapper using fixed heights such as h-[282px] and sm:h-[318px]
+- overflow-hidden on the fretboard wrapper
+- a neck height using h-[calc(100%-2rem)]
+- six rows with fixed minimum heights such as min-h-[38px] and sm:min-h-[44px]
+- target cells repeating the same fixed minimum heights
+- a trapezoid clip-path applied to the neck
+- strings centered inside rectangular rows while the visible neck boundary slopes
+- markers that extend near the top and bottom boundaries
+
+Confirm the actual current implementation. Do not assume these exact classes remain unchanged.
+
+SCOPE
+
+Change only the active Name the Note gameplay layout and the smallest shared layout code required to support it correctly.
+
+Preserve:
+
+- target generation
+- target identity
+- shuffled-deck behavior
+- note-answer logic
+- timing
+- scoring
+- streak behavior
+- Run Points
+- Fluency calculations
+- persistence
+- setup screen behavior
+- results behavior
+- keyboard controls
+- Free Play
+- Guided Learning
+- original Fretboard Drop mode
+- existing visual identity
+- current natural-note answer set
+- all existing data formats
+
+Do not add:
+
+- backend
+- auth
+- database
+- analytics
+- microphone input
+- audio detection
+- global leaderboard
+- new gameplay systems
+- new scoring rules
+- Canvas renderer
+- native SwiftUI renderer
+- broad SVG rewrite
+- a new CSS framework
+- browser automation
+- Playwright
+- screenshot testing
+- live-preview automation
+
+REQUIRED IMPLEMENTATION OUTCOMES
+
+1. CORRECT VIEWPORT OWNERSHIP
+
+The active Name the Note screen must fill the available app content region, not blindly claim an additional full viewport beneath an existing header.
+
+Use a simple, platform-appropriate mobile layout approach.
+
+Consider:
+
+- dynamic viewport units such as 100dvh where appropriate
+- parent flex sizing with min-h-0
+- safe-area insets
+- avoiding nested full-viewport containers
+- removing vertical centering that creates a large dead zone
+
+Do not hard-code the current visible header height unless the existing app shell already exposes a stable variable or layout contract.
+
+2. REMOVE THE LARGE DEAD SPACE
+
+On small phone screens, the HUD, fretboard, and answer panel should form a compact, intentional vertical stack.
+
+The active game content should begin near the top of the available content area, with enough breathing room to feel polished but without a large empty region.
+
+Do not simply translate the whole screen upward with a fixed offset.
+
+3. MAKE FRETBOARD HEIGHT RESPONSIVE AND INTERNALLY CONSISTENT
+
+Replace the fragile combination of:
+
+- fixed outer height
+- hard-coded internal height subtraction
+- repeated minimum row heights
+- hidden overflow
+
+with a simple responsive layout whose dimensions agree with each other.
+
+Preferred direction:
+
+- let headers and dot markers take their natural compact height
+- let the six string rows divide the remaining neck height evenly
+- give the neck a bounded responsive height or aspect ratio
+- ensure the total component height is derived coherently
+- use clamp(), aspect-ratio, grid, or flex only when they simplify the geometry
+
+Do not create a complex JavaScript resize engine unless CSS cannot solve the issue reliably.
+
+4. KEEP ALL SIX STRINGS FULLY VISIBLE
+
+On supported small screens:
+
+- string 1 must be fully visible
+- string 6 must be fully visible
+- the top and bottom of the neck must not be clipped
+- the nut and fret lines must remain coherent
+- the outer border must remain intact
+- target markers must never be cropped
+
+5. ALIGN TARGETS VISUALLY AND GEOMETRICALLY
+
+The target must appear centered on the correct string and inside the correct fret or open-string zone.
+
+Pay special attention to string 1 and string 6.
+
+The decorative neck taper must not make a correctly centered marker look incorrectly offset.
+
+Use the simplest reliable approach:
+
+- reduce or remove the taper on narrow screens, or
+- implement the taper in a way that preserves consistent interior clearance, or
+- move the taper to a decorative layer that does not clip the logical target geometry
+
+Do not add per-string pixel nudges.
+
+6. PRESERVE PROPORTIONAL FRET SPACING
+
+Keep the existing equal-temperament-based fret-width model unless inspection reveals a separate bug.
+
+The marker should remain centered within the same grid cell used by the fret and string geometry.
+
+Do not duplicate fret-position calculations in CSS and JavaScript.
+
+7. COORDINATED MOBILE SCALE
+
+Treat the HUD, fretboard, and answer panel as one composition.
+
+On small screens:
+
+- the fretboard remains the visual hero
+- HUD statistics remain readable but compact
+- the timer remains obvious
+- A through G buttons remain comfortably tappable
+- text must not clip
+- labels must not collide
+- spacing must feel deliberate
+- the screen should not require scrolling during an active run on supported iPhone portrait sizes
+
+Do not make the answer buttons too small merely to force everything into one screen.
+
+8. SAFE AREAS
+
+Respect iPhone safe areas where the app shell requires it.
+
+Ensure content does not collide with:
+
+- status bar or Dynamic Island region
+- Home indicator
+- app navigation controls
+
+Reuse an existing safe-area approach if present. Do not add competing safe-area systems.
+
+9. PORTRAIT FIRST, LANDSCAPE SAFE
+
+Portrait is the primary scope.
+
+Do not perform a major landscape redesign in this task.
+
+However, avoid changes that make landscape unusable. A simple bounded layout is sufficient.
+
+10. PROFESSIONAL VISUAL QUALITY
+
+Retain the current visual language, but refine:
+
+- vertical rhythm
+- spacing
+- border alignment
+- target clearance
+- fretboard proportions
+- HUD balance
+- answer-panel proximity
+
+Do not add glows, animations, gradients, labels, or decorative effects unless needed to correct an existing visual inconsistency.
+
+A professional result should come mostly from exact layout and hierarchy.
+
+RESPONSIVE VALIDATION TARGETS
+
+Validate the code against representative viewport classes, without browser automation:
+
+- small iPhone portrait, approximately 375 x 667
+- compact modern iPhone portrait, approximately 390 x 844
+- larger iPhone portrait, approximately 430 x 932
+- narrow landscape sanity check
+
+Use code inspection, existing test utilities, CSS reasoning, and focused component tests where practical.
+
+Do not use Playwright, browser automation, screenshot comparison, or live-preview automation. I will manually test the visual result on devices.
+
+TEST REQUIREMENTS
+
+Add or update focused tests where they can protect meaningful layout contracts without testing Tailwind implementation details.
+
+Useful testable contracts may include:
+
+- active game shell uses the intended responsive layout state
+- fretboard still renders six string rows
+- all fret cells and the OPEN zone remain present
+- target cell identity remains correct
+- answer controls remain A through G
+- no gameplay behavior changed
+
+Do not write brittle tests that assert long className strings.
+
+Run:
+
+- pnpm run typecheck
+- pnpm run test
+- pnpm run build
+
+If the repository uses different working commands, use the repository's established equivalents.
+
+IMPLEMENTATION OPTIONS TO CONSIDER
+
+Before editing, briefly compare these approaches in your internal engineering review:
+
+OPTION 1: SMALL PATCH
+
+Examples:
+
+- increase fixed height
+- reduce marker size
+- add margin or transform offsets
+
+Reject this unless inspection proves the current diagnosis wrong. It is likely fragile and device-specific.
+
+OPTION 2: FOCUSED RESPONSIVE REFACTOR
+
+Expected best choice:
+
+- correct viewport ownership
+- remove vertical centering
+- coherent responsive fretboard sizing
+- protected outer-string clearance
+- simplified taper behavior
+- coordinated mobile composition
+
+Prefer this if it solves the issue with limited file changes.
+
+OPTION 3: NEW RENDERER OR BROAD REWRITE
+
+Examples:
+
+- Canvas
+- large SVG renderer
+- SwiftUI rewrite
+- generalized responsive layout framework
+
+Do not choose this. It is overkill for the current stage.
+
+GUARDRAILS
+
+- Keep changes small and localized.
+- Do not modify unrelated modes.
+- Do not change business logic.
+- Do not change persistence keys or stored data.
+- Do not change timing constants.
+- Do not change scoring.
+- Do not introduce a second source of fretboard geometry truth.
+- Do not add device-specific media queries for individual iPhone models.
+- Do not hide content to make the screen fit.
+- Do not solve clipping by shrinking everything indiscriminately.
+- Do not introduce unnecessary abstractions.
+- Do not commit or push unless explicitly instructed by the user.
+
+FINAL RESPONSE FORMAT
+
+Report:
+
+1. Root cause confirmed
+2. Files changed
+3. Layout strategy used
+4. How viewport ownership was corrected
+5. How fretboard clipping was eliminated
+6. How outer-string marker alignment was corrected
+7. Safe-area handling
+8. What was deliberately preserved
+9. Tests, typecheck, and build results
+10. Any remaining manual checks for the user
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if all requested changes and checks are finished.
+
+Otherwise end with:
+
+TASK INCOMPLETE
+
+Then state the exact blocker or remaining work.

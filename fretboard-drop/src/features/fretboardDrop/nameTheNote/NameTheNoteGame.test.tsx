@@ -131,7 +131,7 @@ describe("NameTheNoteGame", () => {
     ]);
   });
 
-  it("uses progressive fret spacing, neck taper styling, and increasing string gauges", () => {
+  it("uses progressive fret spacing, an unclipped six-row neck, and increasing string gauges", () => {
     render(<NameTheNoteGame />);
     selectOnlyNote("A");
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
@@ -142,10 +142,20 @@ describe("NameTheNoteGame", () => {
     expect(Number(screen.getByTestId("name-note-fret-header-1").getAttribute("data-fret-width"))).toBeGreaterThan(
       Number(screen.getByTestId("name-note-fret-header-11").getAttribute("data-fret-width")),
     );
-    expect(screen.getByTestId("name-note-neck")).toHaveAttribute("data-neck-taper", "nut-90-to-100");
+    expect(screen.getByTestId("name-note-fretboard")).toHaveAttribute("data-layout", "responsive-six-row-grid");
+    expect(screen.getByTestId("name-note-neck")).toHaveAttribute("data-neck-taper", "none");
+    expect(screen.getAllByTestId(/name-note-string-row-/)).toHaveLength(6);
     expect(Number(screen.getByTestId("name-note-string-row-0").getAttribute("data-string-gauge"))).toBeLessThan(
       Number(screen.getByTestId("name-note-string-row-5").getAttribute("data-string-gauge")),
     );
+  });
+
+  it("uses a top-aligned responsive gameplay stack", () => {
+    render(<NameTheNoteGame />);
+    selectOnlyNote("A");
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    expect(screen.getByTestId("name-note-run-screen")).toHaveAttribute("data-layout", "top-aligned-responsive-stack");
   });
 
   it("does not render a conventional per-question progress bar", () => {
