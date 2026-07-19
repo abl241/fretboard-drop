@@ -12,6 +12,7 @@ import {
   DROP_TARGET_MIN_DURATION_MS,
   DROP_SPEED_MODE_CONFIGS,
   DROP_SPEED_MODE_STORAGE_KEY,
+  DROP_RUN_FORMAT_STORAGE_KEY,
   NATURAL_DROP_NOTES,
   calculateAccuracy,
   createPracticeNoteKey,
@@ -47,11 +48,32 @@ import {
   normalizePracticeContext,
   readBestDropScore,
   readDropSpeedMode,
+  readDropRunFormat,
+  writeDropRunFormat,
   writeBestDropScore,
   writeDropSpeedMode,
 } from "./dropGameUtils";
 
 describe("Fretboard Drop utilities", () => {
+  it("defaults run format safely and persists a valid selection", () => {
+    expect(readDropRunFormat()).toBe("timed");
+    window.localStorage.setItem(DROP_RUN_FORMAT_STORAGE_KEY, "invalid");
+    expect(readDropRunFormat()).toBe("timed");
+    writeDropRunFormat("survival");
+    expect(readDropRunFormat()).toBe("survival");
+    window.localStorage.clear();
+  });
+
+  it("keeps Survival best scores separate and treats legacy values as Timed Trial", () => {
+    window.localStorage.setItem("guitarrise:fretboard-drop:best-score:v1", "11");
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, undefined, "timed")).toBe(11);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, undefined, "survival")).toBe(0);
+    writeBestDropScore(7, [0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "survival");
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "survival")).toBe(7);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "timed")).toBe(11);
+    window.localStorage.clear();
+  });
+
   it("uses the current note pool for generated targets", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     const target = makeDropTarget(1, 0, 0);

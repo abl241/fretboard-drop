@@ -20,6 +20,14 @@ function historyEntry(fluencyScore: number): DropRunHistoryEntry {
 }
 
 describe("Fretboard Drop run history", () => {
+  it("keeps Timed Trial and Survival trends in separate contexts", () => {
+    appendCompletedRunToHistory("mode:standard|format:timed|strings:0", historyEntry(640));
+    appendCompletedRunToHistory("mode:standard|format:survival|strings:0", historyEntry(720));
+
+    expect(getRunHistoryForContext("mode:standard|format:timed|strings:0").map((entry) => entry.fluencyScore)).toEqual([640]);
+    expect(getRunHistoryForContext("mode:standard|format:survival|strings:0").map((entry) => entry.fluencyScore)).toEqual([720]);
+  });
+
   it("appends the first run for a practice context", () => {
     appendCompletedRunToHistory("high-e-all", historyEntry(640));
 

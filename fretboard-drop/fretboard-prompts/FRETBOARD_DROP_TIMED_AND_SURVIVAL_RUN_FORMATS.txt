@@ -1,0 +1,444 @@
+# Fretboard Drop: Add Timed Trial and Survival Run Formats
+
+## Codex recommendation
+
+- Model: Terra
+- Effort: Medium
+- Speed: Normal
+
+## Run instructions
+
+Read and execute this prompt from the repository's `prompts` folder.
+
+Work only in the Fretboard Drop feature. Do not modify unrelated GuitarRise, Transcribe, authentication, backend, database, deployment, or routing code.
+
+Do not run browser automation, Playwright, live preview testing, or screenshot testing. The user will manually test in the browser.
+
+Run only:
+- focused unit/component tests
+- typecheck
+- build
+- `git diff --check`
+
+End the final response with `TASK COMPLETE` only when all requested work and checks are complete. Otherwise end with `TASK INCOMPLETE` and list the exact blocker or remaining work.
+
+---
+
+## Product goal
+
+Offer both current run-ending styles:
+
+1. **Timed Trial**
+   - Fixed 60-second run
+   - Misses count against accuracy and reset the combo
+   - Misses do not end the run
+   - This is the default for first-time users
+
+2. **Survival**
+   - Three missed targets end the run
+   - No 60-second countdown or time-based ending
+   - This is the higher-pressure arcade option
+
+The user should choose the run format from the existing Fretboard Drop start screen. The most recently selected format should persist locally.
+
+## Root-problem review
+
+Explicitly answer in your final report:
+
+**Are we solving the root problem, or just patching the current architecture?**
+
+The root problem is that practice-oriented users and arcade-oriented users need different run-ending rules. The current implementation silently combines both rules, because every run ends at 60 seconds or after three misses. The solution is to make the ending contract explicit and use one shared game engine with a format-specific completion condition.
+
+## Fresh repository findings
+
+Review the current files before editing, especially:
+
+- `src/features/fretboardDrop/FretboardDropGame.tsx`
+- `src/features/fretboardDrop/dropGameTypes.ts`
+- `src/features/fretboardDrop/dropGameUtils.ts`
+- `src/features/fretboardDrop/FretboardDropGame.test.tsx`
+- `src/features/fretboardDrop/dropRunHistory.ts`
+- `src/features/fretboardDrop/dropFluencyScore.ts`
+- `src/features/fretboardDrop/dropResultsMotivation.ts`
+- `src/features/fretboardDrop/dropAnalytics.ts`
+
+Current behavior to preserve:
+
+- The reducer currently computes a 60-second `timeLeftMs`.
+- A missed target currently removes one of three lives.
+- A run currently completes when time reaches zero or the third miss reveal finishes.
+- Wrong fret taps do not remove lives.
+- The start screen currently shows a fixed `3 lives` metadata pill.
+- The HUD currently always shows both lives and a timer.
+- Best scores, fluency bests, run-history context, and analytics context are currently scoped by practice strings, notes, speed mode, and normal/focus practice, but not by the new run format.
+- Results currently support Play Again and Focus Practice replay behavior.
+- Existing horizontal deadline timing, target generation, hit/miss detection, speed modes, focus practice, local cell progress, sounds, scoring, fluency calculation, and results motivation must continue to work.
+
+## Architecture review
+
+Before implementation, compare these options briefly in the final report:
+
+### Option 1: Small patch to current setup
+Add conditional checks directly around `timeLeftMs` and `lives`.
+
+- Lowest code change
+- High risk of scattered format checks
+- Easy to accidentally show the wrong HUD metric or mix score histories
+
+### Option 2: Simple shared architecture, recommended
+Add one explicit run-format type and store it in game state. Keep one reducer and one rendering flow, with small helper functions for format-specific behavior.
+
+- Low complexity
+- Clear maintenance
+- No duplicated game engines or pages
+- Easy to test
+- No backend, database, or new deployment
+
+### Option 3: Strategy-object or separate-engine architecture
+Create separate timed and survival engines or generalized rule objects.
+
+- More scalable in theory
+- More abstractions and moving parts
+- Overkill for two simple formats at the current product stage
+
+Implement Option 2 unless repository evidence reveals a strong reason not to.
+
+## Naming
+
+Avoid overloading the existing `DropRunMode`, which already means `"normal" | "focus"`.
+
+Add a distinct type such as:
+
+```ts
+export type DropRunFormat = "timed" | "survival";
+```
+
+Use clear names consistently. Do not rename the existing normal/focus concept unless truly necessary.
+
+Suggested labels:
+
+- `Timed Trial`
+- `Survival`
+
+Suggested descriptions:
+
+- Timed Trial: `Practice for 60 seconds. Misses count, but the run keeps going.`
+- Survival: `Three missed picks end the run. See how long you can last.`
+
+## Required implementation
+
+### 1. Add explicit run-format state
+
+Add `DropRunFormat` to the appropriate types.
+
+The selected format must be present in the active `DropGameState` and completed `DropGameResult`, so the reducer, HUD, results, replay, analytics, and persistence all use the format that actually started the run.
+
+The run format must be captured at start. Changing setup state later must not alter an active or completed run.
+
+### 2. Add local preference persistence
+
+Add a small localStorage preference helper in the existing utility style.
+
+Suggested key:
+
+```ts
+fretboard-drop:run-format:v1
+```
+
+Requirements:
+
+- New users default to `"timed"`.
+- Returning users without this key also default to `"timed"`.
+- Invalid stored values fall back safely to `"timed"`.
+- Selecting a format persists immediately.
+- Failure to access localStorage must not break the game.
+
+Do not add a new persistence library.
+
+### 3. Add a compact start-screen selector
+
+Place a clear **Run Type** selector near the existing Pick Speed selector. Use the existing visual language and component patterns rather than inventing a new settings screen.
+
+Create a small reusable selector component, similar in spirit to `SpeedModeSelector`.
+
+Each option must show:
+
+- clear label
+- one-line explanation
+- selected state using `aria-pressed`
+
+Timed Trial must appear first and be the default.
+
+Update the start metadata pills:
+
+- Timed Trial: show `60 seconds`
+- Survival: show `3 misses`
+- Keep `frets 0-11`
+- Keep the context-specific best display, but it must reflect the selected run format
+
+Do not show both `3 lives` and `60 seconds` as if both end conditions apply.
+
+Use Krug's rule: the user should understand the difference without opening help.
+
+Use Tufte's rule: do not add decorative text or duplicate explanations.
+
+Use Jobs' rule: make the choice feel intentional and polished, not like an engineering toggle.
+
+### 4. Make reducer completion rules format-specific
+
+#### Timed Trial
+
+- Compute and display the existing 60-second countdown.
+- Complete when `timeLeftMs <= 0`.
+- On a missed target:
+  - increment `misses`
+  - reset combo
+  - show the existing miss reveal/cue
+  - remove the missed target
+  - do not decrement lives as a gameplay-ending resource
+  - after the reveal, spawn the next target and continue if time remains
+- The run must not end because misses reached three.
+
+#### Survival
+
+- Do not complete because 60 seconds elapsed.
+- On a missed target:
+  - decrement remaining lives
+  - increment `misses`
+  - reset combo
+  - use the existing miss reveal/cue
+  - the third miss completes the run after the existing reveal
+- Wrong fret taps must continue not to remove lives.
+- The run can continue beyond 60 seconds.
+
+Keep `performance.now()` as the single gameplay clock. Do not introduce another timer or interval.
+
+Avoid duplicating the reducer. Prefer small explicit helpers such as:
+
+- whether the format uses a timer
+- whether a miss removes a life
+- whether the current state should complete
+
+Do not build a generic rules framework.
+
+### 5. Make the HUD format-specific
+
+Timed Trial HUD:
+
+- show the countdown timer
+- do not show the three-life picks
+
+Survival HUD:
+
+- show the three-life picks
+- do not show a countdown timer
+- include a compact, clear Survival indication if needed, but avoid extra clutter
+
+Keep Score, Combo, Best, focus/practice context, speed label, Home, and responsive behavior.
+
+The HUD layout must not leave an awkward blank space when one metric is hidden.
+
+Accessibility:
+
+- timer remains understandable to screen readers
+- lives continue to expose an accurate label
+- selected run type is communicated through the setup buttons
+
+### 6. Separate best scores and history by run format
+
+This is required. Timed and Survival raw scores are not directly comparable because one has a fixed duration and the other can continue indefinitely.
+
+Update storage/context keys so the following are scoped by run format:
+
+- raw best score
+- best fluency score
+- run-history context and trend
+- any context-specific counters used by results or stats when they depend on completed-run context
+
+Preserve existing stored data safely:
+
+- Treat legacy best/history data as Timed Trial data, because the previous standard run had a 60-second limit.
+- Do not delete or overwrite legacy keys.
+- Prefer read fallback/migration behavior consistent with the current speed-mode legacy handling.
+- Survival should start with clean Survival-specific best/history values.
+- New writes must use format-scoped keys.
+
+Do not mix Timed Trial and Survival values in `Best`, `raw best`, trend strips, or results motivation.
+
+Review all helper signatures that currently accept string selection, practice context, and speed mode. Thread run format through only where required for correct scoping.
+
+### 7. Focus Practice behavior
+
+Focus Practice must remain functional.
+
+Use the currently selected/persisted run format when Focus Practice starts from Stats, unless existing product logic clearly requires a special fixed format.
+
+A Focus Practice replay must preserve:
+
+- focus pool
+- speed mode
+- run format
+
+Do not create a third run-format concept for Focus Practice.
+
+### 8. Results screen
+
+Show the completed run format in the results context line:
+
+- `Timed Trial`
+- `Survival`
+
+Keep the current primary result hierarchy and Play Again behavior.
+
+Play Again must restart with the exact completed run's:
+
+- run format
+- normal/focus mode
+- focus pool when applicable
+- speed mode
+- practice strings
+- practice notes
+
+Do not accidentally use a newly changed setup selection.
+
+Adapt wording only where needed:
+
+- Timed Trial can retain `run complete`.
+- Survival should not imply that the timer expired.
+- `Notes found`, `Accuracy`, `Misses`, and `Best Streak` remain valid for both.
+
+Do not add multiple new result panels.
+
+### 9. Analytics
+
+Add run format to relevant events and context identifiers:
+
+- run started
+- run completed
+- play again
+- practice setting changed when run type changes
+
+Use a stable property such as `runFormat: "timed" | "survival"`.
+
+Correct `runCompletedNormally` or replace it with clearer completion information so it is accurate for both formats. For example, record a completion reason such as:
+
+- `"time-expired"`
+- `"three-misses"`
+
+Keep existing analytics fields unless they become misleading.
+
+### 10. Tests
+
+Add or update focused tests that prove at minimum:
+
+1. Timed Trial is selected by default.
+2. Selecting Survival persists and is restored on remount.
+3. Start-screen metadata changes between `60 seconds` and `3 misses`.
+4. Timed Trial HUD shows timer and not lives.
+5. Survival HUD shows lives and not timer.
+6. Timed Trial does not end after three missed targets.
+7. Timed Trial ends when 60 seconds elapse.
+8. Survival does not end when more than 60 seconds elapse.
+9. Survival ends after the third missed target and reveal.
+10. Wrong fret taps do not remove Survival lives.
+11. Play Again preserves the completed run format.
+12. Best-score keys do not mix Timed Trial and Survival.
+13. Legacy score fallback is treated as Timed Trial only.
+14. Run-history/trend contexts do not mix the two formats.
+15. Existing speed-mode persistence and horizontal deadline tests continue to pass.
+
+Use deterministic fake timers/requestAnimationFrame handling consistent with the existing test file. Do not weaken existing timing tests merely to make the suite pass.
+
+## Design and engineering principles
+
+### Steve Krug
+
+- The difference between the two choices must be self-evident.
+- Use familiar labels and visible selected states.
+- Keep the primary Start Run action obvious.
+- Do not make users infer whether misses or time ends the run.
+
+### Edward Tufte
+
+- Show only the metric that governs the current run.
+- Avoid redundant timer-plus-lives display.
+- Preserve information density without visual noise.
+- Keep result comparisons honest by separating incompatible score contexts.
+
+### Steve Jobs
+
+- The feature should feel like two purposeful experiences, not a debug setting.
+- Preserve the polished first-minute experience.
+- The start screen should still have one obvious path into play.
+- Do not clutter the app with advanced configuration.
+
+### Rob Pike and Ken Thompson
+
+- Keep one game engine.
+- Make state and end conditions explicit.
+- Prefer small pure helpers and straightforward branching.
+- Avoid duplicated reducers, generalized rule engines, unnecessary hooks, or new abstractions.
+- Do not overcomplicate.
+
+## Guardrails
+
+Do not change:
+
+- target movement or deadline geometry
+- current timing synchronization work
+- target duration formulas or adaptive pacing
+- hit detection
+- wrong-answer behavior except where explicitly stated
+- scoring formulas
+- fluency formula
+- note sounds
+- string/note/speed selectors
+- Stats visual design beyond format-correct data scoping
+- cell-progress tracking
+- backend/auth/database
+- unrelated pages or modes
+
+Do not add:
+
+- adjustable run duration
+- adjustable number of lives
+- unlock requirements
+- separate pages
+- separate game reducers
+- global leaderboard
+- server persistence
+- new packages
+
+## Manual-test checklist to include in final report
+
+Provide concise manual checks for the user:
+
+1. Fresh load defaults to Timed Trial.
+2. Timed Trial shows 60 seconds, no life picks, and continues after three misses.
+3. Timed Trial ends at zero.
+4. Survival shows three life picks, no countdown, and continues past 60 seconds.
+5. Survival ends after the third miss reveal.
+6. Wrong fret taps do not remove lives.
+7. Switching format changes the displayed best/history context.
+8. Reload preserves the selected format.
+9. Play Again preserves the completed format.
+10. Focus Practice works in both formats.
+
+## Final response format
+
+Report:
+
+1. Root-problem answer
+2. Architecture option comparison and chosen approach
+3. Files changed
+4. Behavior implemented
+5. Persistence/legacy-data handling
+6. Tests and checks run with outcomes
+7. Manual-test checklist
+8. Any limitations
+
+End with exactly:
+
+`TASK COMPLETE`
+
+Only use that marker if all requested implementation and checks are complete.

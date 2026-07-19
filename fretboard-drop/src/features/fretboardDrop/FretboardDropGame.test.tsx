@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within, waitFor } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_DROP_PRACTICE_CONTEXT,
+  DROP_RUN_FORMAT_STORAGE_KEY,
   DROP_SPEED_MODE_STORAGE_KEY,
   createInitialDropState,
   getDropSpeedModeConfig,
@@ -111,11 +112,13 @@ function startHorizontalReducerGame({
   now = 1_000,
   speedMode = "warm-up",
   runMode = "normal",
+  runFormat = "timed",
   focusPool = [],
 }: {
   now?: number;
   speedMode?: DropSpeedMode;
   runMode?: "normal" | "focus";
+  runFormat?: "timed" | "survival";
   focusPool?: readonly DropFocusPoolCell[];
 } = {}) {
   return dropGameReducer(createInitialDropState(now), {
@@ -125,6 +128,7 @@ function startHorizontalReducerGame({
     stringSelection: [0],
     practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
     speedMode,
+    runFormat,
     runMode,
     focusPool,
     isHorizontalMode: true,
@@ -946,6 +950,7 @@ describe("FretboardDropGame", () => {
   it("keeps wrong clicks from costing a life", () => {
     render(<FretboardDropGame />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
 
@@ -958,6 +963,7 @@ describe("FretboardDropGame", () => {
   it("ignores non-target string clicks without resetting the active run", () => {
     render(<FretboardDropGame />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     for (const note of ["C", "D", "E", "F", "G", "B"]) togglePracticeNote(note);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
@@ -978,6 +984,7 @@ describe("FretboardDropGame", () => {
   it("counts a wrong fret on the active string without costing a life", () => {
     render(<FretboardDropGame />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     for (const note of ["C", "D", "E", "F", "G", "B"]) togglePracticeNote(note);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
@@ -1110,6 +1117,7 @@ describe("FretboardDropGame", () => {
 
     render(<FretboardDropGame />);
     selectPracticeTempo();
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     act(() => {
@@ -1143,6 +1151,7 @@ describe("FretboardDropGame", () => {
 
     render(<FretboardDropGame />);
     selectPracticeTempo();
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     for (const expectedLives of ["2 lives", "1 lives"]) {
@@ -1178,8 +1187,10 @@ describe("FretboardDropGame", () => {
     });
 
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
-    expect(screen.getByText("run complete")).toBeInTheDocument();
+    expect(screen.getByText("survival complete")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Play Again" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Play Again" }));
+    expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
   });
 
   it("shows clearer results labels and keeps Play Again available", () => {
@@ -1214,7 +1225,7 @@ describe("FretboardDropGame", () => {
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     appendCompletedRunToHistory(
-      "mode:standard-60s|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
+      "mode:standard-60s|format:timed|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
       {
         completedAt: 1,
         fluencyScore: 640,
@@ -1236,5 +1247,77 @@ describe("FretboardDropGame", () => {
     expect(screen.getByRole("img", {
       name: "Last 2 Fluency Scores in this practice context: 640, 0. Change minus 640.",
     })).toBeInTheDocument();
+  });
+
+  it("defaults to Timed Trial and restores a persisted Survival choice", () => {
+    const firstRender = render(<FretboardDropGame />);
+    expect(screen.getByRole("button", { name: /Timed Trial/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
+    expect(window.localStorage.getItem(DROP_RUN_FORMAT_STORAGE_KEY)).toBe("survival");
+    firstRender.unmount();
+
+    render(<FretboardDropGame />);
+    expect(screen.getByRole("button", { name: /Survival/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("3 misses")).toBeInTheDocument();
+  });
+
+  it("shows only the governing HUD metric for each run format", () => {
+    const timed = render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    expect(screen.getByLabelText(/seconds remaining/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("3 lives")).not.toBeInTheDocument();
+    timed.unmount();
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/seconds remaining/)).not.toBeInTheDocument();
+  });
+
+  it("keeps Timed Trial running after three misses but ends it at sixty seconds", () => {
+    let state = startHorizontalReducerGame({ runFormat: "timed" });
+    for (let index = 0; index < 3; index += 1) {
+      const target = state.fallingTargets[0]!;
+      const expiredAt = target.startedAt + target.durationMs;
+      state = dropGameReducer(state, { type: "tick", now: expiredAt });
+      const reveal = state.missReveal!;
+      state = dropGameReducer(state, { type: "finish-miss-reveal", id: reveal.id, now: expiredAt + 520 });
+    }
+    expect(state.status).toBe("playing");
+    expect(state.lives).toBe(3);
+    state = dropGameReducer(state, { type: "tick", now: state.runStartedAt + 60_000 });
+    expect(state.status).toBe("complete");
+  });
+
+  it("lets Survival continue past sixty seconds and ends after its third missed reveal", () => {
+    let state = startHorizontalReducerGame({ runFormat: "survival" });
+    state = dropGameReducer(state, { type: "tick", now: state.runStartedAt + 61_000 });
+    expect(state.status).toBe("playing");
+    const firstReveal = state.missReveal!;
+    state = dropGameReducer(state, { type: "finish-miss-reveal", id: firstReveal.id, now: state.now + 520 });
+
+    for (let index = 0; index < 2; index += 1) {
+      const target = state.fallingTargets[0]!;
+      const expiredAt = Math.max(state.now, target.startedAt + target.durationMs);
+      state = dropGameReducer(state, { type: "tick", now: expiredAt });
+      const reveal = state.missReveal!;
+      state = dropGameReducer(state, { type: "finish-miss-reveal", id: reveal.id, now: expiredAt + 520 });
+    }
+    expect(state.status).toBe("complete");
+    expect(state.lives).toBe(0);
+  });
+
+  it("does not remove a Survival life for a wrong fret tap", () => {
+    let state = startHorizontalReducerGame({ runFormat: "survival" });
+    const target = state.fallingTargets[0]!;
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: target.startedAt + 200,
+      stringIndex: target.stringIndex,
+      fret: target.fret === 0 ? 1 : 0,
+      note: target.note,
+    });
+    expect(state.lives).toBe(3);
   });
 });
