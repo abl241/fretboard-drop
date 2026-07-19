@@ -179,9 +179,10 @@ export function recordWrongFretTap(
   record: CellProgressRecord,
   clickedFret: number,
   occurredAt: Date | string = new Date(),
+  referenceFret = record.fret,
 ): CellProgressRecord {
   const touched = touchRecord(record, occurredAt);
-  const fretDistance = Math.abs(Math.round(clickedFret) - touched.fret);
+  const fretDistance = Math.abs(Math.round(clickedFret) - Math.round(referenceFret));
   return {
     ...touched,
     adjacentWrongTaps: touched.adjacentWrongTaps + (fretDistance === 1 ? 1 : 0),
@@ -379,12 +380,13 @@ export async function recordWrongTargetCellProgress(
   clickedFret: number,
   occurredAt: Date | string = new Date(),
   repository: CellProgressRepository = defaultCellProgressRepository,
+  clickedStringIndex: DropStringIndex = target.stringIndex,
 ): Promise<void> {
   await updateCellProgress(repository, {
-    stringIndex: target.stringIndex,
-    fret: target.fret,
-    noteName: target.note,
-  }, (record) => recordWrongFretTap(record, clickedFret, occurredAt));
+    stringIndex: clickedStringIndex,
+    fret: clickedFret,
+    noteName: getNoteAtFret(clickedStringIndex, clickedFret),
+  }, (record) => recordWrongFretTap(record, clickedFret, occurredAt, target.fret));
 }
 
 let cellProgressWriteQueue = Promise.resolve();

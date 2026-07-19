@@ -112,13 +112,13 @@ function startHorizontalReducerGame({
   now = 1_000,
   speedMode = "warm-up",
   runMode = "normal",
-  runFormat = "timed",
+  runFormat = "timed-trial",
   focusPool = [],
 }: {
   now?: number;
   speedMode?: DropSpeedMode;
   runMode?: "normal" | "focus";
-  runFormat?: "timed" | "survival";
+  runFormat?: "timed-trial" | "survival";
   focusPool?: readonly DropFocusPoolCell[];
 } = {}) {
   return dropGameReducer(createInitialDropState(now), {
@@ -1000,7 +1000,7 @@ describe("FretboardDropGame", () => {
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
-  it("ignores non-target string clicks without resetting the active run", () => {
+  it("counts wrong-string clicks without resetting the active run", () => {
     render(<FretboardDropGame />);
 
     fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
@@ -1017,7 +1017,7 @@ describe("FretboardDropGame", () => {
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
-    expect(screen.queryByText("Almost")).not.toBeInTheDocument();
+    expect(screen.getByText("Almost")).toBeInTheDocument();
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
@@ -1105,26 +1105,29 @@ describe("FretboardDropGame", () => {
     });
   });
 
-  it("persists active-string wrong frets on the target cell and ignores non-target strings", async () => {
+  it("persists wrong frets on the actual clicked cell", async () => {
     render(<FretboardDropGame />);
 
     selectAOnly();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
-    fireEvent.click(screen.getByRole("button", { name: "String 2, open string" }));
 
     expect(window.localStorage.getItem(DROP_CELL_PROGRESS_STORAGE_KEY)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "String 2, open string" }));
+    await waitFor(() => {
+      expect(readCellProgressRecord(createFretboardCellId(1, 0))).toMatchObject({
+        resolvedTargets: 0,
+        otherWrongTaps: 1,
+      });
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 4" }));
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 2" }));
     await waitFor(() => {
-      expect(readCellProgressRecord(createFretboardCellId(0, 5))).toMatchObject({
-        resolvedTargets: 0,
-        adjacentWrongTaps: 1,
-        otherWrongTaps: 1,
-      });
+      expect(readCellProgressRecord(createFretboardCellId(0, 5))).toBeUndefined();
     });
-    expect(readCellProgressRecord(createFretboardCellId(0, 4))).toBeUndefined();
-    expect(readCellProgressRecord(createFretboardCellId(0, 2))).toBeUndefined();
+    expect(readCellProgressRecord(createFretboardCellId(0, 4))).toMatchObject({ adjacentWrongTaps: 1 });
+    expect(readCellProgressRecord(createFretboardCellId(0, 2))).toMatchObject({ otherWrongTaps: 1 });
   });
 
   it("shows tier-up feedback once when a streak reaches the first pacing tier", () => {
@@ -1265,7 +1268,7 @@ describe("FretboardDropGame", () => {
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     appendCompletedRunToHistory(
-      "mode:standard-60s|format:timed|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
+      "mode:standard-60s|format:timed-trial|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
       {
         completedAt: 1,
         fluencyScore: 640,
@@ -1312,11 +1315,12 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
+    expect(screen.getByLabelText("Survival time 0:00")).toBeInTheDocument();
     expect(screen.queryByLabelText(/seconds remaining/)).not.toBeInTheDocument();
   });
 
   it("keeps Timed Trial running after three misses but ends it at sixty seconds", () => {
-    let state = startHorizontalReducerGame({ runFormat: "timed" });
+    let state = startHorizontalReducerGame({ runFormat: "timed-trial" });
     for (let index = 0; index < 3; index += 1) {
       const target = state.fallingTargets[0]!;
       const expiredAt = target.startedAt + target.durationMs;
@@ -1359,5 +1363,26 @@ describe("FretboardDropGame", () => {
       note: target.note,
     });
     expect(state.lives).toBe(3);
+  });
+
+  it("records a wrong-string tap without removing a Survival life or moving the active target", () => {
+    let state = startHorizontalReducerGame({ runFormat: "survival" });
+    const target = state.fallingTargets[0]!;
+    const wrongString = target.stringIndex === 0 ? 1 : 0;
+    const tapAt = target.startedAt + 200;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: tapAt,
+      stringIndex: wrongString,
+      fret: target.fret,
+      note: target.note,
+    });
+
+    expect(state.lives).toBe(3);
+    expect(state.wrong).toBe(1);
+    expect(state.combo).toBe(0);
+    expect(state.fallingTargets).toEqual([target]);
+    expect(getTargetProgress(state.fallingTargets[0]!, tapAt)).toBeCloseTo(200 / target.durationMs);
   });
 });

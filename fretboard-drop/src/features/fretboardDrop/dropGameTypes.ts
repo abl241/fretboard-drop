@@ -49,7 +49,7 @@ export type DropTarget = {
 
 export type DropRunMode = "normal" | "focus";
 
-export type DropRunFormat = "timed" | "survival";
+export type DropRunFormat = "timed-trial" | "survival";
 
 export type DropSpeedMode = "warm-up" | "practice-tempo" | "performance-tempo";
 
@@ -110,6 +110,7 @@ export type DropGameState = {
   practiceContext: DropPracticeContext;
   runMode: DropRunMode;
   runFormat: DropRunFormat;
+  bestSurvivalDurationAtStart: number;
   isHorizontalMode: boolean;
   speedMode: DropSpeedMode;
   focusPool: readonly DropFocusPoolCell[];
@@ -132,4 +133,5 @@ export type DropGameResult = {
   runFormat: DropRunFormat;
   speedMode: DropSpeedMode;
   focusPoolSize: number;
+  survivalDurationMs: number;
 };

@@ -50,6 +50,7 @@ import {
   getTargetProgress,
   getPromptTimeRemaining,
   getDropSpeedModeConfig,
+  isNewDropPersonalBest,
   getWrongFeedback,
   isMatchingFret,
   makeDropTarget,
@@ -58,11 +59,13 @@ import {
   normalizePracticeNotes,
   normalizePracticeContext,
   readBestDropScore,
+  readBestSurvivalDuration,
   readDropSpeedMode,
   readDropRunFormat,
   runFormatMissRemovesLife,
   runFormatUsesTimer,
   writeBestDropScore,
+  writeBestSurvivalDuration,
   writeDropSpeedMode,
   writeDropRunFormat,
 } from "./dropGameUtils";
@@ -76,7 +79,7 @@ import {
   writeBestFluencyScore,
 } from "./dropFluencyScore";
 import { getResultsMotivation, getResultsMotivationMessage } from "./dropResultsMotivation";
-import { playFretboardNote, readNoteSoundEnabled, writeNoteSoundEnabled } from "./dropNoteAudio";
+import { playFretboardNote, playWrongBuzz, readNoteSoundEnabled, writeNoteSoundEnabled } from "./dropNoteAudio";
 import {
   appendCompletedRunToHistory,
   getLastFiveTrend,
@@ -110,6 +113,7 @@ type DropGameAction =
       practiceContext: DropPracticeContext;
       speedMode: DropSpeedMode;
       runFormat?: DropRunFormat;
+      bestSurvivalDuration?: number;
       runMode?: "normal" | "focus";
       focusPool?: readonly DropFocusPoolCell[];
       isHorizontalMode?: boolean;
@@ -224,6 +228,7 @@ export function dropGameReducer(state: DropGameState, action: DropGameAction): D
         isHorizontalMode,
         speedMode: action.speedMode,
         runFormat: action.runFormat ?? DEFAULT_DROP_RUN_FORMAT,
+        bestSurvivalDurationAtStart: action.bestSurvivalDuration ?? 0,
         focusPool,
         bestScoreAtStart: action.bestScore,
       };
@@ -283,10 +288,6 @@ export function dropGameReducer(state: DropGameState, action: DropGameAction): D
     case "fret-click": {
       const playableTarget = getPlayableFallingTarget(state.fallingTargets, action.now, state.missReveal !== null);
       if (state.status !== "playing" || !playableTarget) return state;
-      if (action.stringIndex !== playableTarget.stringIndex) {
-        return { ...state, now: action.now };
-      }
-
       const hit = isMatchingFret(action.stringIndex, action.fret, playableTarget);
       const feedback: DropFeedback = {
         id: action.now,
@@ -469,6 +470,7 @@ export function FretboardDropGame({
   const [speedMode, setSpeedMode] = useState<DropSpeedMode>(readDropSpeedMode);
   const [runFormat, setRunFormat] = useState<DropRunFormat>(readDropRunFormat);
   const [bestScore, setBestScore] = useState(() => readBestDropScore(DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT, speedMode, runFormat));
+  const [bestSurvivalDuration, setBestSurvivalDuration] = useState(() => readBestSurvivalDuration(DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT, speedMode));
   const [bestFluencyScore, setBestFluencyScore] = useState(() => readBestFluencyScore(DEFAULT_DROP_STRING_SELECTION, DEFAULT_DROP_PRACTICE_CONTEXT, speedMode, runFormat));
   const [stringSelection, setStringSelection] = useState<DropStringSelection>(DEFAULT_DROP_STRING_SELECTION);
   const [showQuickPeekNotes, setShowQuickPeekNotes] = useState(false);
@@ -527,12 +529,19 @@ export function FretboardDropGame({
       correct: state.correct,
       averageHitProgress,
       trend: getLastFiveTrend([...getRunHistoryForContext(practiceContextKey), currentHistoryEntry]),
-      isNewPersonalBest: state.score > state.bestScoreAtStart,
+      isNewPersonalBest: isNewDropPersonalBest({
+        runFormat: state.runFormat,
+        score: state.score,
+        bestScore: state.bestScoreAtStart,
+        survivalDurationMs: Math.max(0, state.now - state.runStartedAt),
+        bestSurvivalDurationMs: state.bestSurvivalDurationAtStart,
+      }),
       isNewFluencyBest: fluencyScore > previousBestFluency,
       runMode: state.runMode,
       runFormat: state.runFormat,
       speedMode: state.speedMode,
       focusPoolSize: state.focusPool.length,
+      survivalDurationMs: Math.max(0, state.now - state.runStartedAt),
     };
   }, [state]);
 
@@ -588,6 +597,7 @@ export function FretboardDropGame({
   useEffect(() => {
     if (state.status !== "complete") return;
     const latestBest = readBestDropScore(state.stringSelection, state.practiceContext, state.speedMode, state.runFormat);
+    const latestBestSurvivalDuration = readBestSurvivalDuration(state.stringSelection, state.practiceContext, state.speedMode);
     const latestFluencyBest = readBestFluencyScore(state.stringSelection, state.practiceContext, state.speedMode, state.runFormat);
     const accuracy = calculateAccuracy(state.correct, state.wrong, state.misses);
     const fluencyScore = calculateFluencyScore({
@@ -599,7 +609,14 @@ export function FretboardDropGame({
       hitProgresses: state.hitProgresses,
     });
     const fluencyScoreLabel = getFluencyScoreLabel(fluencyScore);
-    const isNewPersonalBest = state.score > latestBest;
+    const survivalDurationMs = Math.max(0, Math.round(state.now - state.runStartedAt));
+    const isNewPersonalBest = isNewDropPersonalBest({
+      runFormat: state.runFormat,
+      score: state.score,
+      bestScore: latestBest,
+      survivalDurationMs,
+      bestSurvivalDurationMs: latestBestSurvivalDuration,
+    });
     const isNewFluencyBest = fluencyScore > latestFluencyBest;
 
     if (completedRunTrackedRef.current !== state.runStartedAt) {
@@ -653,7 +670,7 @@ export function FretboardDropGame({
         wrongCount: state.wrong,
         correct: state.correct,
         instantRecallCount: state.hitProgresses.filter((hitProgress) => hitProgress <= INSTANT_RECALL_PROGRESS_CUTOFF).length,
-        completionReason: state.runFormat === "timed" ? "time-expired" : "three-misses",
+        completionReason: state.runFormat === "timed-trial" ? "time-expired" : "three-misses",
         actualRunDurationSec: Math.max(0, Math.round((state.now - state.runStartedAt) / 100) / 10),
         newBestForContext: isNewFluencyBest,
         previousBestFluencyForContext: latestFluencyBest,
@@ -663,7 +680,7 @@ export function FretboardDropGame({
         nextFluencyLabel: motivation.nextFluencyLabel,
         isNewPersonalBest,
         isNewFluencyBest,
-        durationMs: Math.max(0, Math.round(state.now - state.runStartedAt)),
+        durationMs: survivalDurationMs,
       };
       trackDropEvent("run_completed", runPayload);
     }
@@ -673,6 +690,13 @@ export function FretboardDropGame({
       setBestScore(state.score);
     } else {
       setBestScore(latestBest);
+    }
+
+    if (state.runFormat === "survival" && survivalDurationMs > latestBestSurvivalDuration) {
+      writeBestSurvivalDuration(survivalDurationMs, state.stringSelection, state.practiceContext, state.speedMode);
+      setBestSurvivalDuration(survivalDurationMs);
+    } else {
+      setBestSurvivalDuration(latestBestSurvivalDuration);
     }
 
     if (fluencyScore > latestFluencyBest) {
@@ -687,6 +711,7 @@ export function FretboardDropGame({
     const selected = normalizeStringSelection(nextSelection);
     setStringSelection(selected);
     setBestScore(readBestDropScore(selected, practiceContext, speedMode, runFormat));
+    setBestSurvivalDuration(readBestSurvivalDuration(selected, practiceContext, speedMode));
     setBestFluencyScore(readBestFluencyScore(selected, practiceContext, speedMode, runFormat));
     trackDropEvent("practice_settings_changed", {
       ...getPracticeAnalyticsPayload(selected, practiceContext, DROP_RUN_MODE, speedMode, runFormat),
@@ -698,6 +723,7 @@ export function FretboardDropGame({
     const normalizedPractice = normalizePracticeContext(nextPracticeContext);
     setPracticeContext(normalizedPractice);
     setBestScore(readBestDropScore(stringSelection, normalizedPractice, speedMode, runFormat));
+    setBestSurvivalDuration(readBestSurvivalDuration(stringSelection, normalizedPractice, speedMode));
     setBestFluencyScore(readBestFluencyScore(stringSelection, normalizedPractice, speedMode, runFormat));
     trackDropEvent("practice_settings_changed", {
       ...getPracticeAnalyticsPayload(stringSelection, normalizedPractice, DROP_RUN_MODE, speedMode, runFormat),
@@ -709,6 +735,7 @@ export function FretboardDropGame({
     setSpeedMode(nextSpeedMode);
     writeDropSpeedMode(nextSpeedMode);
     setBestScore(readBestDropScore(stringSelection, practiceContext, nextSpeedMode, runFormat));
+    setBestSurvivalDuration(readBestSurvivalDuration(stringSelection, practiceContext, nextSpeedMode));
     setBestFluencyScore(readBestFluencyScore(stringSelection, practiceContext, nextSpeedMode, runFormat));
     trackDropEvent("practice_settings_changed", {
       ...getPracticeAnalyticsPayload(stringSelection, practiceContext, DROP_RUN_MODE, nextSpeedMode, runFormat),
@@ -720,6 +747,7 @@ export function FretboardDropGame({
     setRunFormat(nextRunFormat);
     writeDropRunFormat(nextRunFormat);
     setBestScore(readBestDropScore(stringSelection, practiceContext, speedMode, nextRunFormat));
+    setBestSurvivalDuration(readBestSurvivalDuration(stringSelection, practiceContext, speedMode));
     setBestFluencyScore(readBestFluencyScore(stringSelection, practiceContext, speedMode, nextRunFormat));
     trackDropEvent("practice_settings_changed", {
       ...getPracticeAnalyticsPayload(stringSelection, practiceContext, DROP_RUN_MODE, speedMode, nextRunFormat),
@@ -743,6 +771,7 @@ export function FretboardDropGame({
     setStringSelection(runSelection);
     setPracticeContext(runPracticeContext);
     setBestScore(latestBest);
+    setBestSurvivalDuration(readBestSurvivalDuration(runSelection, runPracticeContext, speedModeOverride));
     setBestFluencyScore(latestFluencyBest);
     completedRunTrackedRef.current = null;
     missProgressRecordedRef.current = null;
@@ -754,6 +783,7 @@ export function FretboardDropGame({
       practiceContext: runPracticeContext,
       speedMode: speedModeOverride,
       runFormat: runFormatOverride,
+      bestSurvivalDuration: readBestSurvivalDuration(runSelection, runPracticeContext, speedModeOverride),
       isHorizontalMode: useHorizontalDeadlineStage,
     });
     trackDropEvent("run_started", {
@@ -788,6 +818,7 @@ export function FretboardDropGame({
     setStringSelection(runSelection);
     setPracticeContext(runPracticeContext);
     setBestScore(latestBest);
+    setBestSurvivalDuration(readBestSurvivalDuration(runSelection, runPracticeContext, speedModeOverride));
     setBestFluencyScore(latestFluencyBest);
     completedRunTrackedRef.current = null;
     missProgressRecordedRef.current = null;
@@ -799,6 +830,7 @@ export function FretboardDropGame({
       practiceContext: runPracticeContext,
       speedMode: speedModeOverride,
       runFormat: runFormatOverride,
+      bestSurvivalDuration: readBestSurvivalDuration(runSelection, runPracticeContext, speedModeOverride),
       runMode: "focus",
       focusPool,
       isHorizontalMode: useHorizontalDeadlineStage,
@@ -831,15 +863,18 @@ export function FretboardDropGame({
 
   function handleFretClick(stringIndex: number, fret: number) {
     const now = performance.now();
+    const clickedStringIndex = stringIndex as DropStringIndex;
     const playableTarget = getPlayableFallingTarget(state.fallingTargets, now);
-    if (noteSoundEnabled && playableTarget?.stringIndex === stringIndex) {
-      playFretboardNote({ stringIndex: playableTarget.stringIndex, fret });
+    const isCorrectClick = Boolean(playableTarget && playableTarget.stringIndex === stringIndex && isMatchingFret(stringIndex, fret, playableTarget));
+    if (noteSoundEnabled && playableTarget) {
+      if (isCorrectClick) playFretboardNote({ stringIndex: clickedStringIndex, fret });
+      else playWrongBuzz();
     }
-    if (state.status === "playing" && playableTarget?.stringIndex === stringIndex) {
-      if (isMatchingFret(stringIndex, fret, playableTarget)) {
+    if (state.status === "playing" && playableTarget) {
+      if (isCorrectClick) {
         recordCellProgressSafely(() => recordCorrectTargetCellProgress(playableTarget, getTargetProgress(playableTarget, now), new Date()));
       } else {
-        recordCellProgressSafely(() => recordWrongTargetCellProgress(playableTarget, fret, new Date()));
+        recordCellProgressSafely(() => recordWrongTargetCellProgress(playableTarget, fret, new Date(), undefined, clickedStringIndex));
       }
     }
     dispatch({
@@ -878,6 +913,7 @@ export function FretboardDropGame({
           ) : state.status === "start" ? (
             <DropStartScreen
               bestScore={bestScore}
+              bestSurvivalDuration={bestSurvivalDuration}
               stringSelection={stringSelection}
               practiceContext={practiceContext}
               speedMode={speedMode}
@@ -899,6 +935,7 @@ export function FretboardDropGame({
             <DropGameResults
               result={result}
               bestScore={bestScore}
+              bestSurvivalDuration={bestSurvivalDuration}
               bestFluencyScore={bestFluencyScore}
               stringSelection={state.stringSelection}
               practiceContext={state.practiceContext}
@@ -933,6 +970,7 @@ export function FretboardDropGame({
                 combo={state.combo}
                 lives={state.lives}
                 timeLeftMs={state.timeLeftMs}
+                elapsedMs={Math.max(0, state.now - state.runStartedAt)}
                 runFormat={state.runFormat}
                 bestScore={Math.max(bestScore, state.score)}
                 stringSelection={state.stringSelection}
@@ -1117,6 +1155,7 @@ function HitBurst() {
 
 function DropStartScreen({
   bestScore,
+  bestSurvivalDuration,
   stringSelection,
   practiceContext,
   speedMode,
@@ -1135,6 +1174,7 @@ function DropStartScreen({
   onSwitchToNameTheNote,
 }: {
   bestScore: number;
+  bestSurvivalDuration: number;
   stringSelection: DropStringSelection;
   practiceContext: DropPracticeContext;
   speedMode: DropSpeedMode;
@@ -1159,7 +1199,7 @@ function DropStartScreen({
   return (
     <div className="drop-start-screen flex flex-1 items-center justify-center py-8">
       <div className="drop-start-panel w-full max-w-3xl text-center">
-        <p className="drop-start-eyebrow text-xs font-black uppercase tracking-[0.42em] text-cyan-200/75">{runFormat === "timed" ? "60 second recall run" : "three-miss survival run"}</p>
+        <p className="drop-start-eyebrow text-xs font-black uppercase tracking-[0.42em] text-cyan-200/75">{runFormat === "timed-trial" ? "60 second recall run" : "three-miss survival run"}</p>
         <h1 className="drop-start-title mt-4 text-5xl font-black tracking-tight text-white sm:text-7xl">Fretboard Drop</h1>
         {import.meta.env.DEV ? (
           <p className="drop-dev-note mt-2 text-xs font-semibold text-slate-500">{DEV_BUILD_NOTE}</p>
@@ -1179,9 +1219,9 @@ function DropStartScreen({
         ) : null}
         <StartFretboardPreview stringSelection={stringSelection} practiceContext={practiceContext} showNotes={showQuickPeekNotes} />
         <div className="drop-start-meta mt-7 flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-slate-300">
-          <span className="rounded-full border border-slate-700/80 px-4 py-2">{runFormat === "timed" ? "60 seconds" : "3 misses"}</span>
+          <span className="rounded-full border border-slate-700/80 px-4 py-2">{runFormat === "timed-trial" ? "60 seconds" : "3 misses"}</span>
           <span className="rounded-full border border-slate-700/80 px-4 py-2">frets 0-11</span>
-          <span className="rounded-full border border-slate-700/80 px-4 py-2">{practiceLabel} best {bestScore}</span>
+          <span className="rounded-full border border-slate-700/80 px-4 py-2">{runFormat === "survival" ? `best ${formatElapsedTime(bestSurvivalDuration)}` : `${practiceLabel} best ${bestScore}`}</span>
         </div>
         <div className="drop-start-actions mt-9 flex flex-wrap items-center justify-center gap-3">
           <button
@@ -1346,6 +1386,7 @@ function DropGameHud({
   combo,
   lives,
   timeLeftMs,
+  elapsedMs,
   runFormat,
   bestScore,
   stringSelection,
@@ -1360,6 +1401,7 @@ function DropGameHud({
   combo: number;
   lives: number;
   timeLeftMs: number;
+  elapsedMs: number;
   runFormat: DropRunFormat;
   bestScore: number;
   stringSelection: DropStringSelection;
@@ -1393,7 +1435,13 @@ function DropGameHud({
         ) : null}
       </div>
       <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-1">
-        {runFormat === "survival" ? <Lives value={lives} /> : (
+        {runFormat === "survival" ? <>
+          <Lives value={lives} />
+          <div className="flex h-11 min-w-24 items-center justify-center gap-2 rounded-lg border border-cyan-200/25 bg-cyan-300/12 px-3 font-mono text-lg font-black text-cyan-50" aria-label={`Survival time ${formatElapsedTime(elapsedMs)}`}>
+            <Timer className="h-4 w-4 text-cyan-200" />
+            {formatElapsedTime(elapsedMs)}
+          </div>
+        </> : (
           <div className="flex h-11 min-w-24 items-center justify-center gap-2 rounded-lg border border-cyan-200/25 bg-cyan-300/12 px-3 font-mono text-2xl font-black text-cyan-50" aria-label={`${seconds} seconds remaining`}>
             <Timer className="h-5 w-5 text-cyan-200" />
             {seconds}
@@ -1402,6 +1450,11 @@ function DropGameHud({
       </div>
     </div>
   );
+}
+
+function formatElapsedTime(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1_000));
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
 }
 
 function Lives({ value }: { value: number }) {
@@ -1653,8 +1706,8 @@ function RunFormatSelector({
   onChange: (runFormat: DropRunFormat) => void;
 }) {
   const options: readonly { id: DropRunFormat; label: string; description: string }[] = [
-    { id: "timed", label: "Timed Trial", description: "Practice for 60 seconds. Misses count, but the run keeps going." },
-    { id: "survival", label: "Survival", description: "Three missed picks end the run. See how long you can last." },
+    { id: "timed-trial", label: "Timed Trial", description: "Find as many notes as you can in 60 seconds." },
+    { id: "survival", label: "Survival", description: "Protect three picks and keep the run alive." },
   ];
 
   return (
@@ -1999,6 +2052,7 @@ function PositionDotRow({ frets }: { frets: number[] }) {
 function DropGameResults({
   result,
   bestScore,
+  bestSurvivalDuration,
   bestFluencyScore,
   stringSelection,
   practiceContext,
@@ -2008,6 +2062,7 @@ function DropGameResults({
 }: {
   result: DropGameResult;
   bestScore: number;
+  bestSurvivalDuration: number;
   bestFluencyScore: number;
   stringSelection: DropStringSelection;
   practiceContext: DropPracticeContext;
@@ -2033,16 +2088,28 @@ function DropGameResults({
     averageHitProgress: result.averageHitProgress,
   });
   const isFocusRun = result.runMode === "focus";
-  const runFormatLabel = result.runFormat === "timed" ? "Timed Trial" : "Survival";
+  const runFormatLabel = result.runFormat === "timed-trial" ? "Timed Trial" : "Survival";
+  const displaySurvivalDuration = Math.max(bestSurvivalDuration, result.survivalDurationMs);
 
   return (
     <div className="drop-results-screen flex flex-1 items-center justify-center py-8">
       <div className="drop-results-panel w-full max-w-2xl text-center">
-        <p className="drop-results-eyebrow text-xs font-black uppercase tracking-[0.42em] text-amber-100/72">{result.runFormat === "timed" ? "run complete" : "survival complete"}</p>
-        <h1 className="drop-results-score mt-4 text-6xl font-black tracking-tight text-white drop-shadow-[0_0_28px_rgba(252,211,77,0.2)] sm:text-8xl">{result.fluencyScore}</h1>
-        <p className="drop-results-score-label mt-2 text-lg font-semibold text-amber-50/82">Fluency Score / 1000</p>
-        <p className="mt-1 text-sm font-black uppercase tracking-[0.18em] text-cyan-100/80">{fluencyScoreLabel}</p>
-        {result.isNewFluencyBest ? (
+        <p className="drop-results-eyebrow text-xs font-black uppercase tracking-[0.42em] text-amber-100/72">{result.runFormat === "timed-trial" ? "run complete" : "survival complete"}</p>
+        <h1 className="drop-results-score mt-4 text-6xl font-black tracking-tight text-white drop-shadow-[0_0_28px_rgba(252,211,77,0.2)] sm:text-8xl">{result.runFormat === "survival" ? formatElapsedTime(result.survivalDurationMs) : result.fluencyScore}</h1>
+        <p className="drop-results-score-label mt-2 text-lg font-semibold text-amber-50/82">{result.runFormat === "survival" ? "Survival Time" : "Fluency Score / 1000"}</p>
+        {result.runFormat === "survival" ? (
+          <p className="mt-2 text-sm font-semibold text-slate-400">Fluency Score {result.fluencyScore} · {fluencyScoreLabel}</p>
+        ) : <p className="mt-1 text-sm font-black uppercase tracking-[0.18em] text-cyan-100/80">{fluencyScoreLabel}</p>}
+        {result.runFormat === "survival" ? (
+          result.isNewPersonalBest ? (
+            <div className="drop-results-best mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-amber-100/55 bg-amber-300/18 px-4 py-2 text-sm font-black uppercase tracking-[0.14em] text-amber-100 shadow-[0_0_28px_rgba(252,211,77,0.18)]">
+              <Trophy className="h-4 w-4" />
+              New Survival Best
+            </div>
+          ) : (
+            <p className="drop-results-best mt-4 text-base font-semibold text-slate-300">Best Survival {formatElapsedTime(displaySurvivalDuration)}</p>
+          )
+        ) : result.isNewFluencyBest ? (
           <div className="drop-results-best mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-amber-100/55 bg-amber-300/18 px-4 py-2 text-sm font-black uppercase tracking-[0.14em] text-amber-100 shadow-[0_0_28px_rgba(252,211,77,0.18)]">
             <Trophy className="h-4 w-4" />
             New best Fluency
@@ -2050,7 +2117,7 @@ function DropGameResults({
         ) : (
           <p className="drop-results-best mt-4 text-base font-semibold text-slate-300">Best Fluency {displayBestFluency}</p>
         )}
-        <p className="mt-2 text-xs font-semibold text-slate-400">{runFormatLabel} · {selectionLabel} · {speedConfig.label} · raw best {displayBest}</p>
+        <p className="mt-2 text-xs font-semibold text-slate-400">{runFormatLabel} · {selectionLabel} · {speedConfig.label} · {result.runFormat === "survival" ? `best ${formatElapsedTime(displaySurvivalDuration)}` : `raw best ${displayBest}`}</p>
         {isFocusRun ? (
           <div className="mx-auto mt-3 max-w-md rounded-lg border border-amber-200/20 bg-amber-300/8 px-4 py-3 text-sm font-semibold text-amber-50/82">
             <span className="font-black uppercase tracking-[0.14em] text-amber-100">Focus Practice</span>
@@ -2059,9 +2126,10 @@ function DropGameResults({
         ) : null}
         <p className="drop-results-suggestion mx-auto mt-4 max-w-md text-base font-semibold text-slate-300">{motivationMessage}</p>
         <ResultsTrendStrip trend={result.trend} />
-        <div className="drop-results-stats mx-auto mt-8 grid max-w-lg grid-cols-2 gap-3 text-left sm:grid-cols-4">
+        <div className="drop-results-stats mx-auto mt-8 grid max-w-lg grid-cols-2 gap-3 text-left sm:grid-cols-5">
           <ResultStat label="Notes found" value={result.score} tone="gold" />
           <ResultStat label="Accuracy" value={`${result.accuracy}%`} tone="muted" />
+          <ResultStat label="Wrong Taps" value={result.wrong} tone="muted" />
           <ResultStat label="Misses" value={result.misses} tone="muted" />
           <ResultStat label="Best Streak" value={result.bestStreak} />
         </div>

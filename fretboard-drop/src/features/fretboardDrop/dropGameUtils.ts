@@ -49,8 +49,9 @@ export const DROP_PACING_TIERS = [
   { minCombo: 5, speedUpMs: 650, message: "Let's speed up!" },
 ] as const;
 export const DROP_SPEED_MODE_STORAGE_KEY = "fretboard-drop:speed-mode:v1";
-export const DROP_RUN_FORMAT_STORAGE_KEY = "fretboard-drop:run-format:v1";
-export const DEFAULT_DROP_RUN_FORMAT = "timed" as const satisfies DropRunFormat;
+export const DROP_RUN_FORMAT_STORAGE_KEY = "fretboard-drop:run-format:v2";
+const LEGACY_DROP_RUN_FORMAT_STORAGE_KEY = "fretboard-drop:run-format:v1";
+export const DEFAULT_DROP_RUN_FORMAT = "timed-trial" as const satisfies DropRunFormat;
 export const DEFAULT_FIRST_TIME_DROP_SPEED_MODE = "warm-up" as const satisfies DropSpeedMode;
 export const DEFAULT_RETURNING_DROP_SPEED_MODE = "practice-tempo" as const satisfies DropSpeedMode;
 export const DROP_SPEED_MODE_CONFIGS = [
@@ -215,12 +216,16 @@ export function normalizeDropSpeedMode(speedMode: string | null | undefined): Dr
 }
 
 export function normalizeDropRunFormat(runFormat: string | null | undefined): DropRunFormat | null {
-  return runFormat === "timed" || runFormat === "survival" ? runFormat : null;
+  return runFormat === "timed-trial" || runFormat === "survival" ? runFormat : null;
 }
 
 export function readDropRunFormat(): DropRunFormat {
   try {
-    return normalizeDropRunFormat(window.localStorage.getItem(DROP_RUN_FORMAT_STORAGE_KEY)) ?? DEFAULT_DROP_RUN_FORMAT;
+    const storedRunFormat = normalizeDropRunFormat(window.localStorage.getItem(DROP_RUN_FORMAT_STORAGE_KEY));
+    if (storedRunFormat) return storedRunFormat;
+    return window.localStorage.getItem(LEGACY_DROP_RUN_FORMAT_STORAGE_KEY) === "survival"
+      ? "survival"
+      : DEFAULT_DROP_RUN_FORMAT;
   } catch {
     return DEFAULT_DROP_RUN_FORMAT;
   }
@@ -235,11 +240,29 @@ export function writeDropRunFormat(runFormat: DropRunFormat): void {
 }
 
 export function runFormatUsesTimer(runFormat: DropRunFormat): boolean {
-  return runFormat === "timed";
+  return runFormat === "timed-trial";
 }
 
 export function runFormatMissRemovesLife(runFormat: DropRunFormat): boolean {
   return runFormat === "survival";
+}
+
+export function isNewDropPersonalBest({
+  runFormat,
+  score,
+  bestScore,
+  survivalDurationMs,
+  bestSurvivalDurationMs,
+}: {
+  runFormat: DropRunFormat;
+  score: number;
+  bestScore: number;
+  survivalDurationMs: number;
+  bestSurvivalDurationMs: number;
+}): boolean {
+  if (runFormat === "timed-trial") return score > bestScore;
+  return survivalDurationMs > bestSurvivalDurationMs
+    || (survivalDurationMs === bestSurvivalDurationMs && score > bestScore);
 }
 
 export function getDropSpeedModeConfig(speedMode: DropSpeedMode = DEFAULT_RETURNING_DROP_SPEED_MODE) {
@@ -518,7 +541,7 @@ function appendSpeedModeKey(baseKey: string, speedMode?: DropSpeedMode): string 
   return speedMode ? `${baseKey}:speed:${speedMode}` : baseKey;
 }
 
-function appendRunFormatKey(baseKey: string, runFormat: DropRunFormat): string {
+function appendRunFormatKey(baseKey: string, runFormat: DropRunFormat | "timed"): string {
   return `${baseKey}:format:${runFormat}`;
 }
 
@@ -526,7 +549,7 @@ function getBestScoreStorageKey(
   selection: DropStringSelection,
   practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT,
   speedMode?: DropSpeedMode,
-  runFormat?: DropRunFormat,
+  runFormat?: DropRunFormat | "timed",
 ): string {
   const stringKey = getStringSelectionKey(selection);
   const practiceKey = createPracticeNoteKey(practiceContext);
@@ -554,6 +577,10 @@ export function readBestDropScore(
     const selectedBest = parseStoredBestScore(window.localStorage.getItem(getBestScoreStorageKey(selected, normalizedPractice, speedMode, runFormat)));
     if (selectedBest > 0) return selectedBest;
     if (runFormat === "survival") return 0;
+    if (runFormat === "timed-trial") {
+      const legacyTimedBest = parseStoredBestScore(window.localStorage.getItem(getBestScoreStorageKey(selected, normalizedPractice, speedMode, "timed")));
+      if (legacyTimedBest > 0) return legacyTimedBest;
+    }
     if (speedMode === DEFAULT_RETURNING_DROP_SPEED_MODE) {
       const formatScopedLegacyBest = parseStoredBestScore(window.localStorage.getItem(getBestScoreStorageKey(selected, normalizedPractice, undefined, runFormat)));
       if (formatScopedLegacyBest > 0) return formatScopedLegacyBest;
@@ -574,6 +601,40 @@ export function readBestDropScore(
     return 0;
   } catch {
     return 0;
+  }
+}
+
+function getBestSurvivalDurationStorageKey(
+  selection: DropStringSelection,
+  practiceContext: DropPracticeContext,
+  speedMode?: DropSpeedMode,
+): string {
+  return `${getBestScoreStorageKey(selection, practiceContext, speedMode, "survival")}:duration-ms`;
+}
+
+export function readBestSurvivalDuration(
+  selection: DropStringSelection = DEFAULT_DROP_STRING_SELECTION,
+  practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT,
+  speedMode?: DropSpeedMode,
+): number {
+  try {
+    const durationMs = Number.parseInt(window.localStorage.getItem(getBestSurvivalDurationStorageKey(selection, practiceContext, speedMode)) ?? "0", 10);
+    return Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function writeBestSurvivalDuration(
+  durationMs: number,
+  selection: DropStringSelection = DEFAULT_DROP_STRING_SELECTION,
+  practiceContext: DropPracticeContext = DEFAULT_DROP_PRACTICE_CONTEXT,
+  speedMode?: DropSpeedMode,
+): void {
+  try {
+    window.localStorage.setItem(getBestSurvivalDurationStorageKey(selection, practiceContext, speedMode), String(Math.max(0, Math.round(durationMs))));
+  } catch {
+    // Survival duration is a local-only personal best.
   }
 }
 
@@ -904,6 +965,7 @@ export function createInitialDropState(now: number = 0): DropGameState {
     practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
     runMode: "normal",
     runFormat: DEFAULT_DROP_RUN_FORMAT,
+    bestSurvivalDurationAtStart: 0,
     isHorizontalMode: true,
     speedMode: DEFAULT_FIRST_TIME_DROP_SPEED_MODE,
     focusPool: [],

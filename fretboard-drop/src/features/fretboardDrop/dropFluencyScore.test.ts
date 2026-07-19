@@ -14,7 +14,7 @@ function hitProgresses(count: number, progress: number): number[] {
 describe("Fretboard Drop Fluency Score", () => {
   it("keeps Survival Fluency bests separate and uses legacy values for Timed Trial only", () => {
     writeBestFluencyScore(640, [0], { practiceType: "string-focus", selectedNotes: null });
-    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, undefined, "timed")).toBe(640);
+    expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, undefined, "timed-trial")).toBe(640);
     expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, undefined, "survival")).toBe(0);
     writeBestFluencyScore(720, [0], { practiceType: "string-focus", selectedNotes: null }, "practice-tempo", "survival");
     expect(readBestFluencyScore([0], { practiceType: "string-focus", selectedNotes: null }, "practice-tempo", "survival")).toBe(720);

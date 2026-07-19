@@ -103,3 +103,24 @@ export function playFretboardNote({
 
   activeAudio = { oscillator, gain };
 }
+
+export function playWrongBuzz(): void {
+  const context = getAudioContext();
+  if (!context) return;
+
+  const now = context.currentTime;
+  stopActiveAudio(now);
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "square";
+  oscillator.frequency.setValueAtTime(110, now);
+  oscillator.frequency.exponentialRampToValueAtTime(72, now + 0.12);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.07, now + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.16);
+  activeAudio = { oscillator, gain };
+}

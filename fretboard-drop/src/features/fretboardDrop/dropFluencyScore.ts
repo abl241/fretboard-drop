@@ -92,7 +92,7 @@ function getBestFluencyScoreStorageKey(
   selection: DropStringSelection,
   practiceContext: DropPracticeContext,
   speedMode?: DropSpeedMode,
-  runFormat?: DropRunFormat,
+  runFormat?: DropRunFormat | "timed",
 ): string {
   const stringKey = getStringSelectionKey(selection);
   const practiceKey = createPracticeNoteKey(practiceContext);
@@ -117,7 +117,10 @@ export function readBestFluencyScore(
   try {
     const scopedScore = parseStoredBestFluencyScore(window.localStorage.getItem(getBestFluencyScoreStorageKey(selection, practiceContext, speedMode, runFormat)));
     if (scopedScore > 0) return scopedScore;
-    if (runFormat === "survival") return 0;
+    if (runFormat === "timed-trial") {
+      const legacyTimedScore = parseStoredBestFluencyScore(window.localStorage.getItem(getBestFluencyScoreStorageKey(selection, practiceContext, speedMode, "timed")));
+      if (legacyTimedScore > 0) return legacyTimedScore;
+    }
     if (speedMode && speedMode !== DEFAULT_RETURNING_DROP_SPEED_MODE) return 0;
     const formatScopedLegacyScore = parseStoredBestFluencyScore(window.localStorage.getItem(getBestFluencyScoreStorageKey(selection, practiceContext, undefined, runFormat)));
     if (formatScopedLegacyScore > 0) return formatScopedLegacyScore;
