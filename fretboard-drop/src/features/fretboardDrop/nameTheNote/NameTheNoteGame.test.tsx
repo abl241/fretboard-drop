@@ -7,6 +7,7 @@ import {
   NameTheNoteGame,
   buildNameTheNoteTargetPool,
   drawNameTheNoteTarget,
+  getNameTheNoteRunGrade,
   getNameTheNoteFretSpaceFractions,
   shuffleNameTheNoteTargets,
 } from "./NameTheNoteGame";
@@ -16,6 +17,13 @@ describe("NameTheNoteGame", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("maps Fluency to an exciting S through C run grade", () => {
+    expect(getNameTheNoteRunGrade(940)).toBe("S");
+    expect(getNameTheNoteRunGrade(800)).toBe("A");
+    expect(getNameTheNoteRunGrade(600)).toBe("B");
+    expect(getNameTheNoteRunGrade(400)).toBe("C");
   });
 
   it("builds eligible targets from selected settings", () => {
@@ -309,6 +317,28 @@ describe("NameTheNoteGame", () => {
     expect(screen.queryByText("Time's up · A")).not.toBeInTheDocument();
   });
 
+  it("signals the final push and celebrates streak milestones", () => {
+    vi.useFakeTimers();
+    const advanceClock = mockPerformanceClock();
+    render(<NameTheNoteGame />);
+    selectOnlyNote("A");
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    for (let index = 0; index < 3; index += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Answer A" }));
+      act(() => {
+        advanceClock(500);
+      });
+    }
+    expect(screen.getByTestId("name-note-streak-milestone")).toHaveTextContent("Heating up");
+
+    act(() => {
+      advanceClock(NAME_THE_NOTE_RUN_DURATION_MS - 9_000 - 1_500);
+    });
+    expect(screen.getByTestId("name-note-final-push")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-run-screen")).toHaveAttribute("data-final-push", "true");
+  });
+
   it("ends at session expiration and shows the results summary", () => {
     vi.useFakeTimers();
     const advanceClock = mockPerformanceClock();
@@ -329,6 +359,9 @@ describe("NameTheNoteGame", () => {
     expect(screen.getByText("Accuracy")).toBeInTheDocument();
     expect(screen.getByText("Avg Correct")).toBeInTheDocument();
     expect(screen.getByText("Best Streak")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-results-grade")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-best-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-next-challenge")).toBeInTheDocument();
   });
 
   it("Play Again restarts with the same settings", () => {

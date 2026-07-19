@@ -69,6 +69,8 @@ type NameTheNoteState = {
   bestStreak: number;
   correctResponseMsTotal: number;
   correctResponseCount: number;
+  fastestCorrectResponseMs: number | null;
+  finalPushCorrect: number;
   targetPool: readonly FretboardTarget[];
   targetDeck: readonly FretboardTarget[];
   previousTargetKey: string | null;
@@ -140,6 +142,8 @@ function createInitialNameTheNoteState(now: number): NameTheNoteState {
     bestStreak: 0,
     correctResponseMsTotal: 0,
     correctResponseCount: 0,
+    fastestCorrectResponseMs: null,
+    finalPushCorrect: 0,
     targetPool: [],
     targetDeck: [],
     previousTargetKey: null,
@@ -356,6 +360,8 @@ function nameTheNoteReducer(state: NameTheNoteState, action: NameTheNoteAction):
         totalQuestionMs: timedQuestion.totalQuestionMs,
         streak: nextStreak,
       });
+      const responseMs = Math.max(0, action.now - timedQuestion.startedAt);
+      const elapsedMs = action.now - state.runStartedAt;
       return {
         ...state,
         now: action.now,
@@ -363,8 +369,14 @@ function nameTheNoteReducer(state: NameTheNoteState, action: NameTheNoteAction):
         correct: state.correct + 1,
         streak: nextStreak,
         bestStreak: Math.max(state.bestStreak, nextStreak),
-        correctResponseMsTotal: state.correctResponseMsTotal + Math.max(0, action.now - timedQuestion.startedAt),
+        correctResponseMsTotal: state.correctResponseMsTotal + responseMs,
         correctResponseCount: state.correctResponseCount + 1,
+        fastestCorrectResponseMs: state.fastestCorrectResponseMs === null
+          ? responseMs
+          : Math.min(state.fastestCorrectResponseMs, responseMs),
+        finalPushCorrect: elapsedMs >= NAME_THE_NOTE_RUN_DURATION_MS - 10_000
+          ? state.finalPushCorrect + 1
+          : state.finalPushCorrect,
         activeQuestion: {
           ...timedQuestion,
             outcome: "correct",
@@ -397,7 +409,59 @@ type NameTheNoteResult = {
   fluencyDelta: number;
   isNewBestFluency: boolean;
   fluencyEvidence: NameTheNoteFluencyEvidence;
+  grade: NameTheNoteRunGrade;
+  headline: string;
+  fastestCorrectResponseMs: number | null;
+  finalPushCorrect: number;
+  nextChallenge: string;
 };
+
+export type NameTheNoteRunGrade = "S" | "A" | "B" | "C";
+
+export function getNameTheNoteRunGrade(fluencyScore: number): NameTheNoteRunGrade {
+  if (fluencyScore >= 900) return "S";
+  if (fluencyScore >= 750) return "A";
+  if (fluencyScore >= 550) return "B";
+  return "C";
+}
+
+function getNameTheNoteRunHeadline({
+  grade,
+  isNewBest,
+  bestStreak,
+  finalPushCorrect,
+}: {
+  grade: NameTheNoteRunGrade;
+  isNewBest: boolean;
+  bestStreak: number;
+  finalPushCorrect: number;
+}): string {
+  if (isNewBest) return "New best. You found another gear.";
+  if (grade === "S") return "Locked in. That was a master run.";
+  if (finalPushCorrect >= 3) return "Strong finish. You turned up the pressure.";
+  if (bestStreak >= 8) return "You were on fire.";
+  if (grade === "A") return "Sharp run. Your recall is moving fast.";
+  if (grade === "B") return "Solid run. One more push can lift it.";
+  return "The map is getting clearer. Run it back.";
+}
+
+function getNameTheNoteNextChallenge({
+  grade,
+  bestStreak,
+  accuracy,
+  finalPushCorrect,
+}: {
+  grade: NameTheNoteRunGrade;
+  bestStreak: number;
+  accuracy: number;
+  finalPushCorrect: number;
+}): string {
+  if (grade === "S") return "Protect the S: keep your fastest answers clean.";
+  if (finalPushCorrect < 3) return "Next run: find 3 notes in the final 10 seconds.";
+  if (bestStreak < 5) return "Next run: build a clean streak to 5.";
+  if (accuracy < 90) return "Next run: trade one wrong press for a cleaner answer.";
+  return "Next run: answer 0.2s earlier on your first try.";
+}
 
 function getNameTheNoteResult(state: NameTheNoteState): NameTheNoteResult {
   const fluencyEvidence: NameTheNoteFluencyEvidence = {
@@ -410,12 +474,14 @@ function getNameTheNoteResult(state: NameTheNoteState): NameTheNoteResult {
     totalQuestionMs: NAME_THE_NOTE_QUESTION_DURATION_MS,
   };
   const fluencyScore = calculateNameTheNoteFluencyScore(fluencyEvidence);
+  const grade = getNameTheNoteRunGrade(fluencyScore);
+  const accuracy = Math.round(calculateNameTheNoteAccuracy(fluencyEvidence));
   return {
     runPoints: state.score,
     correct: state.correct,
     incorrect: state.incorrect,
     timeouts: state.timeouts,
-    accuracy: Math.round(calculateNameTheNoteAccuracy(fluencyEvidence)),
+    accuracy,
     averageCorrectResponseMs: state.correctResponseCount > 0
       ? Math.round(state.correctResponseMsTotal / state.correctResponseCount)
       : null,
@@ -426,6 +492,21 @@ function getNameTheNoteResult(state: NameTheNoteState): NameTheNoteResult {
     fluencyDelta: fluencyScore - state.bestFluencyAtStart,
     isNewBestFluency: fluencyScore > state.bestFluencyAtStart,
     fluencyEvidence,
+    grade,
+    headline: getNameTheNoteRunHeadline({
+      grade,
+      isNewBest: state.score > state.bestScoreAtStart,
+      bestStreak: state.bestStreak,
+      finalPushCorrect: state.finalPushCorrect,
+    }),
+    fastestCorrectResponseMs: state.fastestCorrectResponseMs,
+    finalPushCorrect: state.finalPushCorrect,
+    nextChallenge: getNameTheNoteNextChallenge({
+      grade,
+      bestStreak: state.bestStreak,
+      accuracy,
+      finalPushCorrect: state.finalPushCorrect,
+    }),
   };
 }
 
@@ -754,12 +835,15 @@ function NameTheNoteRunScreen({
 }) {
   const question = state.activeQuestion;
   const seconds = Math.ceil(state.timeLeftMs / 1000);
+  const isFinalPush = state.timeLeftMs <= 10_000;
+  const streakMilestone = getNameTheNoteStreakMilestone(state.streak);
 
   return (
     <div
-      className="mx-auto flex min-h-0 w-full max-w-[88rem] flex-1 flex-col gap-2 py-2"
+      className={`mx-auto flex min-h-0 w-full max-w-[88rem] flex-1 flex-col gap-2 py-2 ${isFinalPush ? "name-note-run--final-push" : ""}`}
       data-testid="name-note-run-screen"
       data-layout="top-aligned-responsive-stack"
+      data-final-push={isFinalPush ? "true" : "false"}
     >
       <div className="name-note-hud grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-slate-700/55 bg-slate-950/78 p-2 shadow-md sm:grid-cols-[auto_repeat(2,minmax(7rem,auto))_1fr_auto]">
         <button
@@ -778,12 +862,13 @@ function NameTheNoteRunScreen({
           Best {bestScore}
         </div>
         <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-1">
-          <div className="name-note-run-timer flex h-10 min-w-24 items-center justify-center gap-2 rounded-md border border-cyan-200/20 bg-cyan-300/10 px-3 font-mono text-xl font-black text-cyan-50">
+          <div className={`name-note-run-timer flex h-10 min-w-24 items-center justify-center gap-2 rounded-md border px-3 font-mono text-xl font-black ${isFinalPush ? "name-note-run-timer--urgent border-amber-100/60 bg-amber-300/18 text-amber-50" : "border-cyan-200/20 bg-cyan-300/10 text-cyan-50"}`} aria-label={`${seconds} seconds remaining`}>
             <Timer className="h-5 w-5 text-cyan-200" />
             {seconds}
           </div>
         </div>
       </div>
+      {isFinalPush ? <div className="name-note-final-push text-center text-xs font-black uppercase tracking-[0.24em] text-amber-100" data-testid="name-note-final-push">Final push · make the last answers count</div> : null}
       {question ? (
       <div className="flex min-h-0 flex-col items-center gap-1.5">
           <NameTheNoteFretboard
@@ -795,10 +880,19 @@ function NameTheNoteRunScreen({
             interactionEnabled={question.outcome === "idle"}
           />
           <AnswerPanel question={question} onAnswer={onAnswer} />
+          {streakMilestone ? <div className="name-note-streak-milestone text-center text-sm font-black uppercase tracking-[0.18em] text-amber-100" data-testid="name-note-streak-milestone">{streakMilestone}</div> : null}
         </div>
       ) : null}
     </div>
   );
+}
+
+function getNameTheNoteStreakMilestone(streak: number): string | null {
+  if (streak >= 12) return "Unstoppable · 12 streak";
+  if (streak >= 8) return "On fire · 8 streak";
+  if (streak >= 5) return "Locked in · 5 streak";
+  if (streak >= 3) return "Heating up · 3 streak";
+  return null;
 }
 
 function RunStat({
@@ -1095,6 +1189,13 @@ function NameTheNoteResults({
     <div className="flex flex-1 items-center justify-center py-8">
       <div className="w-full max-w-3xl text-center">
         <p className="text-xs font-black uppercase tracking-[0.42em] text-amber-100/72">run complete</p>
+        <div className="name-note-results-grade mx-auto mt-4 flex items-center justify-center gap-3" data-testid="name-note-results-grade">
+          <span className="name-note-grade-mark" aria-label={`Run grade ${result.grade}`}>{result.grade}</span>
+          <div className="text-left">
+            <p className="text-xl font-black text-white">{result.headline}</p>
+            <p className="text-sm font-semibold text-slate-400">Your 60-second map recall report</p>
+          </div>
+        </div>
         <div className="mx-auto mt-5 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="rounded-lg border border-amber-100/24 bg-amber-300/10 p-4">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-100/72">Run Points</p>
@@ -1118,6 +1219,13 @@ function NameTheNoteResults({
             New Fluency best
           </div>
         ) : null}
+        <div className="name-note-best-moment mx-auto mt-5 max-w-2xl rounded-lg border border-emerald-100/20 bg-emerald-300/8 px-4 py-3 text-left" data-testid="name-note-best-moment">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100/70">Best moment</p>
+          <p className="mt-1 text-sm font-bold text-emerald-50">
+            {result.fastestCorrectResponseMs === null ? "Your first clean answer is waiting." : `Fastest correct answer · ${(result.fastestCorrectResponseMs / 1000).toFixed(1)}s`}
+            <span className="ml-2 text-slate-400">· {result.finalPushCorrect} in the final 10s</span>
+          </p>
+        </div>
         <div className="mx-auto mt-8 grid max-w-2xl grid-cols-2 gap-3 text-left sm:grid-cols-4">
           <ResultStat label="Correct" value={result.correct} tone="gold" />
           <ResultStat label="Wrong Attempts" value={result.incorrect} />
@@ -1125,6 +1233,10 @@ function NameTheNoteResults({
           <ResultStat label="Accuracy" value={`${result.accuracy}%`} />
           <ResultStat label="Avg Correct" value={result.averageCorrectResponseMs === null ? "-" : `${(result.averageCorrectResponseMs / 1000).toFixed(1)}s`} />
           <ResultStat label="Best Streak" value={result.bestStreak} />
+        </div>
+        <div className="name-note-next-challenge mx-auto mt-5 max-w-2xl rounded-lg border border-amber-100/20 bg-amber-300/8 px-4 py-3 text-left" data-testid="name-note-next-challenge">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/70">Next challenge</p>
+          <p className="mt-1 text-sm font-bold text-amber-50">{result.nextChallenge}</p>
         </div>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <button
