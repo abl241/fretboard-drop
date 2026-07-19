@@ -1,0 +1,433 @@
+FRETBOARD DROP
+RESTORE MOVING PICK TO HORIZONTAL DEADLINE
+
+MODEL RECOMMENDATION
+Model: Terra
+Effort: High
+Speed: Normal
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+PRIMARY GOAL
+
+Fix the original Fretboard Drop / Find the Note gameplay regression where the guitar-pick prompt appears on the horizontal stage but no longer moves toward the deadline.
+
+The user has confirmed that the most recent Name the Note visual refinement was committed and pushed. This bug is in the original Fretboard Drop horizontal-deadline game, not Name the Note.
+
+The screenshot shows:
+
+- the note pick visible near the left side of the upper horizontal stage
+- the deadline visible near the right side
+- the selected string highlighted on the fretboard
+- the pick apparently remaining stationary instead of traveling toward the deadline
+
+Do not confuse this with the Name the Note target, which is intentionally fixed to a fret position.
+
+ARE WE SOLVING THE ROOT PROBLEM, OR JUST PATCHING THE CURRENT ARCHITECTURE?
+
+Solve the root problem.
+
+The likely defect is that the original game currently has two time sources:
+
+1. reducer state time, such as `state.now`, used for gameplay progress, misses, and spawning
+2. separate component animation state, such as `animationNow`, used only to render the visible pick position
+
+If those clocks stop updating together, gameplay and visual motion can disagree.
+
+However, do not blindly implement that hypothesis.
+
+First inspect the current pushed code and prove the actual failure path. Confirm:
+
+- which clock drives `getTargetProgress`
+- which clock reaches `HorizontalDeadlineStage`
+- whether requestAnimationFrame continues dispatching ticks
+- whether CSS freezes or overrides the computed position
+- whether `activeTargetId` becomes null
+- whether progress changes while `data-position-percent` stays fixed
+- whether the bug affects both normal runs and Focus Practice
+
+Then apply the smallest root-level fix.
+
+ENGINEERING REVIEW BEFORE EDITING
+
+Explicitly compare these options in your internal review:
+
+OPTION 1: SMALL CSS OR ANIMATION PATCH
+
+Examples:
+
+- add or change a CSS transition
+- add a keyframe animation
+- force a transform
+- increase animation duration
+- manually move the pick with CSS
+
+Complexity:
+Low initially.
+
+Maintenance:
+Poor if it creates a second motion system.
+
+Risk:
+High chance of hiding the true synchronization problem.
+
+Verdict:
+Reject unless inspection proves the underlying progress values are correct and only CSS rendering is broken.
+
+OPTION 2: SINGLE AUTHORITATIVE GAME CLOCK
+
+Likely preferred solution:
+
+- use the reducer's canonical `state.now` for both gameplay and visual rendering
+- remove redundant animation-time state if it serves no independent purpose
+- keep one requestAnimationFrame loop that dispatches reducer ticks
+- derive pick progress and position from the same state that controls misses and spawning
+
+Complexity:
+Low to moderate.
+
+Maintenance:
+Low.
+
+Risk:
+Small and localized if tests protect the timing path.
+
+Verdict:
+Prefer if inspection confirms duplicate or desynchronized clocks.
+
+OPTION 3: NEW ANIMATION ENGINE OR REFACTOR
+
+Examples:
+
+- animation library
+- Web Animations API rewrite
+- Canvas renderer
+- separate game-loop service
+- broad reducer redesign
+
+Complexity:
+High.
+
+Maintenance:
+High.
+
+Risk:
+Unnecessary regression surface.
+
+Verdict:
+Reject as overkill.
+
+GUIDING PRINCIPLES
+
+ROB PIKE AND KEN THOMPSON
+
+- One concept should have one authoritative representation.
+- Prefer one clock over two synchronized clocks.
+- Remove redundant state rather than adding synchronization code.
+- Keep the data path short and obvious.
+- Avoid new abstractions, engines, dependencies, or clever timing layers.
+- Fix the actual cause, not the visible symptom.
+- Make the smallest change that fully restores correct behavior.
+
+STEVE KRUG
+
+- What the player sees must match what the game is doing.
+- The pick should obviously travel toward the visible deadline.
+- Do not make the player infer motion from a timer or other indirect cue.
+- Preserve obvious interaction: read note, find fret, click before impact.
+- Do not change controls, labels, or layout unless required for the repair.
+
+STEVE JOBS
+
+- Restore the essential magical interaction.
+- Motion should feel direct, smooth, precise, and intentional.
+- Do not layer decorative animation over broken mechanics.
+- Preserve the current visual design and remove invisible technical complexity.
+- The experience should feel reliable, not merely technically patched.
+
+REACT STATE PRINCIPLE
+
+React's official guidance recommends avoiding redundant and duplicate state because duplicated values are difficult to keep synchronized.
+
+Use that principle here:
+
+- if visual time can be derived from reducer state, do not keep a second copy
+- render the interface from one authoritative state snapshot
+- do not add an effect whose only purpose is copying one clock into another
+
+FILES TO INSPECT FIRST
+
+Likely relevant files:
+
+- `src/features/fretboardDrop/FretboardDropGame.tsx`
+- `src/features/fretboardDrop/HorizontalDeadlineStage.tsx`
+- `src/features/fretboardDrop/dropGameUtils.ts`
+- `src/features/fretboardDrop/dropGameTypes.ts`
+- focused tests for Fretboard Drop and HorizontalDeadlineStage
+- `src/index.css` only if inspection shows a rendering/CSS issue
+
+Do not modify Name the Note files unless inspection proves shared code is involved.
+
+CURRENT ARCHITECTURE TO VERIFY
+
+The current code likely includes:
+
+- a requestAnimationFrame loop during `state.status === "playing"`
+- reducer `tick` actions that assign `state.now`
+- a separate `animationNow` or `animationTime`
+- `HorizontalDeadlineStage` receiving `animationTime`
+- `getTargetProgress(activeTarget, animationTime)`
+- `getHorizontalDeadlinePickRightPercent(progress)`
+- inline pick position derived from progress
+- start and deadline percentages near 12% and 86%
+
+Verify all of this against the current branch before editing.
+
+REQUIRED DIAGNOSTIC STEPS
+
+1. Trace the full movement path:
+
+```text
+requestAnimationFrame
+→ current timestamp
+→ reducer or local state
+→ HorizontalDeadlineStage prop
+→ getTargetProgress
+→ getHorizontalDeadlinePickRightPercent
+→ inline left/transform style
+→ visible pick
+```
+
+2. Identify exactly where the live value stops changing.
+
+3. Check whether the issue is caused by:
+
+- stale local animation state
+- state reset after start
+- requestAnimationFrame effect lifecycle
+- wrong dependency list
+- `activeTargetId` mismatch
+- `performance.now()` timestamp-domain mismatch
+- missing re-render
+- CSS transform overriding position
+- reduced-motion CSS freezing the entire motion
+- a visual-polish selector accidentally affecting the horizontal pick
+
+4. State the confirmed root cause in the final report.
+
+PREFERRED FIX IF DUPLICATE CLOCKS ARE CONFIRMED
+
+In `FretboardDropGame.tsx`:
+
+- remove separate `animationNow` state if it is only a duplicate of reducer time
+- remove `setAnimationNow(...)` calls
+- retain one requestAnimationFrame loop
+- have the loop dispatch:
+
+```ts
+dispatch({ type: "tick", now });
+```
+
+- pass `state.now` to `HorizontalDeadlineStage`
+- pass `state.now` to the legacy `DropStage` if that renderer still exists
+- remove obsolete time-reset calls from:
+  - normal run start
+  - Focus Practice start
+  - returning home
+  - fret clicks
+- do not add an effect to mirror `state.now` into another state variable
+
+Keep the prop named `animationTime` if renaming it would create unnecessary scope. A small rename to `currentTime` is acceptable only if it clearly improves readability and remains localized.
+
+TIMESTAMP SAFETY
+
+Ensure that target `startedAt`, tick `now`, fret-click `now`, and miss calculations all use the same timestamp domain.
+
+Preferred domain:
+
+```ts
+performance.now()
+```
+
+Do not mix `Date.now()` with `performance.now()` for gameplay elapsed-time calculations.
+
+`Date.now()` may remain for persisted calendar timestamps or analytics if already appropriate.
+
+PRESERVE THESE BEHAVIORS
+
+Do not change:
+
+- target generation
+- note selection
+- focus pool behavior
+- speed-mode durations
+- lives
+- score
+- combo
+- miss timing
+- wrong-answer behavior
+- hit detection
+- deadline location
+- pick start location
+- fretboard geometry
+- selected-string highlighting
+- sound behavior
+- analytics
+- localStorage
+- results
+- Fluency calculations
+- Name the Note
+- Guided Learning
+- setup screens
+- responsive layout
+- current visual polish
+
+Do not add:
+
+- new dependency
+- animation library
+- Canvas
+- backend
+- auth
+- database
+- new timer service
+- new global store
+- CSS keyframe that independently simulates target progress
+- per-device offsets
+- browser automation
+- Playwright
+- screenshot testing
+- live-preview automation
+
+TEST REQUIREMENTS
+
+Add focused regression coverage that proves live movement, not only the pure percentage formula.
+
+At minimum cover:
+
+1. NORMAL RUN MOVEMENT
+
+- start a run at a controlled timestamp
+- confirm the active horizontal pick begins near the configured start position
+- advance the game clock with a later tick
+- confirm `data-progress` increases
+- confirm `data-position-percent` increases
+- confirm the target approaches the deadline near expiration
+
+2. FOCUS PRACTICE MOVEMENT
+
+- start Focus Practice
+- confirm the pick also advances with later ticks
+- ensure the active target remains from the selected focus pool
+
+3. MISS TIMING
+
+- advance to progress >= 1
+- confirm the existing miss path still occurs
+- confirm a life is lost according to current rules
+- confirm the next target behavior remains unchanged
+
+4. CORRECT HIT
+
+- advance partway
+- click the correct fret
+- confirm existing scoring and target resolution remain unchanged
+
+5. SINGLE CLOCK CONTRACT
+
+Protect the intended architecture without brittle implementation tests.
+
+Good contract:
+
+- rendered position is derived from the same current time used by reducer gameplay progress
+
+Avoid:
+
+- asserting every class string
+- testing private React state directly
+- snapshotting large markup
+
+6. REDUCED MOTION
+
+Confirm reduced-motion styling does not freeze actual target travel.
+
+Reduced motion may remove pulses, fragments, or decorative transitions, but the pick must still change position because movement is core gameplay information.
+
+MANUAL CHECKS TO REPORT
+
+Ask the user to verify:
+
+- normal mode pick moves continuously from left to right
+- Focus Practice pick moves continuously
+- Warm-Up, Practice Tempo, and Performance Tempo retain distinct speeds
+- pick reaches the deadline at the same moment the miss occurs
+- correct fret clicks still resolve the target
+- wrong clicks still behave as before
+- backgrounding and returning to the tab does not permanently freeze the pick
+- reduced-motion mode still shows positional travel
+- mobile portrait and landscape remain usable
+
+VALIDATION
+
+Do not run browser automation, Playwright, live-preview automation, or screenshot testing.
+
+Run:
+
+- `pnpm run typecheck`
+- `pnpm run test`
+- `pnpm run build`
+
+Use the repository's established equivalents if different.
+
+SCOPE DISCIPLINE
+
+This is a bug repair, not a redesign.
+
+Expected production code changes should be small and likely limited to:
+
+- `FretboardDropGame.tsx`
+- possibly `HorizontalDeadlineStage.tsx`
+- focused test files
+
+Do not change CSS unless inspection proves CSS is part of the root cause.
+
+Do not modify the recently completed Name the Note visual work.
+
+Do not commit or push unless explicitly instructed.
+
+FINAL RESPONSE FORMAT
+
+Report:
+
+1. Confirmed root cause
+2. Why the pick stopped visually moving
+3. Files changed
+4. Exact clock/data-flow repair
+5. Whether redundant animation state was removed
+6. Timestamp-domain verification
+7. Normal-run regression coverage
+8. Focus Practice regression coverage
+9. Miss and correct-hit preservation
+10. Reduced-motion behavior
+11. What was deliberately preserved
+12. Typecheck, test, and build results
+13. Manual checks for the user
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if:
+
+- the root cause was confirmed
+- the pick movement was repaired
+- focused regression tests were added
+- typecheck passed
+- tests passed
+- build passed
+
+Otherwise end with:
+
+TASK INCOMPLETE
+
+Then state the exact blocker or remaining work.

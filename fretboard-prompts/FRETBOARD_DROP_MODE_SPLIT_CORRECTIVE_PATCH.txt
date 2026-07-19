@@ -1,0 +1,305 @@
+FRETBOARD DROP CORRECTIVE PATCH: MODE-AWARE BESTS, WRONG-STRING FEEDBACK, AND SURVIVAL RESULTS
+
+Model: Luna
+Effort: Medium
+Speed: Fast
+
+Read and execute this prompt from the repository prompts folder.
+
+Project: Fretboard Drop
+Scope: Fretboard Drop only
+
+Important testing instruction:
+Do not run browser automation, Playwright, live preview testing, or screenshot testing. I will manually test in the browser. Run only focused tests, typecheck, build, and git diff --check.
+
+Before implementation, explicitly answer:
+“Are we solving the root problem, or just patching the current architecture?”
+
+ROOT PROBLEM
+
+The Timed Trial and Survival split is implemented and the architecture is sound, but three integration gaps remain:
+
+1. Survival personal-best status is still calculated with Timed Trial score logic in one result path.
+2. Wrong-string clicks now count as wrong in the reducer, but the event handler still skips wrong audio and progress recording for those clicks.
+3. Survival results lead with survival time but still celebrate Fluency as the primary achievement, weakening the mode’s distinct promise.
+
+This prompt is a narrow corrective patch. Do not redesign the mode system or rewrite the reducer.
+
+ENGINEERING REVIEW
+
+Compare these options before changing code:
+
+1. Small local patch
+Fix the three inconsistent branches directly.
+- Lowest complexity
+- Appropriate if the duplicated best logic can be safely centralized in a small helper
+- Preferred if clear and testable
+
+2. Focused helper extraction
+Create one small mode-aware personal-best helper and reuse it in both result construction and completion persistence.
+- Slightly more change
+- Reduces duplicated rule logic
+- Preferred if it prevents the same inconsistency from recurring
+
+3. Generalized scoring/achievement framework
+Create extensible strategies, registries, or classes for all game modes.
+- More abstraction and maintenance
+- Overkill for two modes
+- Do not choose
+
+Choose Option 1 or 2. Prefer the smallest solution that creates one authoritative rule.
+
+GUIDING PRODUCT AND ENGINEERING PRINCIPLES
+
+Krug:
+- The player should not have to interpret what “best” means.
+- Survival should visibly reward survival.
+- Every click should produce understandable feedback.
+
+Jobs:
+- Each mode should have a focused emotional promise.
+- Timed Trial celebrates speed and score.
+- Survival celebrates staying alive.
+- Remove mixed messages rather than adding explanatory copy.
+
+Tufte:
+- Give visual prominence only to the metric that matters most for the selected mode.
+- Keep secondary information available but subordinate.
+- Avoid decorative additions and duplicate labels.
+
+Pike:
+- Keep the rule simple.
+- Use one source of truth.
+- Do not add frameworks where a small pure helper is enough.
+- Preserve the existing clock, reducer, rendering, and persistence paths.
+- Make behavior obvious from the code.
+
+VERIFIED CURRENT FILE BEHAVIOR
+
+In FretboardDropGame.tsx:
+
+- The memoized result object currently uses:
+  `isNewPersonalBest: state.score > state.bestScoreAtStart`
+
+- The completion effect separately uses mode-aware logic:
+  - Survival: longer survival duration, then score as tie-breaker
+  - Timed Trial: higher score
+
+These must not disagree.
+
+The current handleFretClick logic:
+- Plays note audio only when the clicked string matches the target string.
+- Records wrong-cell progress only when the clicked string matches the target string.
+- The reducer itself now correctly treats any nonmatching fretboard cell, including a wrong string, as wrong.
+
+The current Survival results:
+- Correctly show survival duration as the main number.
+- Still show the fluency label directly below it.
+- Still show “New best Fluency” or “Best Fluency” as the primary achievement badge/text.
+- Show survival best only in smaller metadata.
+
+CORRECTION 1: ONE MODE-AWARE PERSONAL-BEST RULE
+
+Create one small pure helper or equivalent single source of truth for determining whether a completed run is a new personal best.
+
+Required behavior:
+
+Timed Trial:
+- New personal best when score is greater than the previous Timed Trial best score.
+
+Survival:
+- New personal best when survival duration is greater than the previous Survival best duration.
+- If survival duration is exactly equal, use score as the tie-breaker.
+- Do not treat a higher score with a shorter survival duration as a Survival personal best.
+
+Use the same rule for:
+- The result object
+- Completion analytics
+- Motivation inputs
+- Results celebration
+- Replay metadata
+- Any other existing `isNewPersonalBest` consumer
+
+Do not compute this rule independently in multiple places.
+
+Use existing values and storage readers. Do not add a new persistence layer.
+
+If `bestScoreAtStart` alone is not sufficient for Survival tie-breaking, add the smallest explicit state or input needed, such as the survival best duration at run start and the score associated with an equal-duration comparison only if existing persistence supports it.
+
+Important:
+- Inspect current Survival score and duration persistence before choosing the tie-break implementation.
+- If the current storage does not preserve the score associated with the best survival duration, do not invent a broad migration.
+- In that case, use duration as the authoritative Survival personal best and document that equal-duration score tie-breaking cannot be persisted reliably yet, or add the smallest versioned paired record if safe.
+- Keep existing data compatible.
+
+CORRECTION 2: COMPLETE WRONG-STRING FEEDBACK
+
+Any incorrect fretboard click must follow one consistent wrong-answer path, including a click on the wrong string.
+
+Required behavior:
+- Increment wrong count through the existing reducer.
+- Reset combo through the existing reducer.
+- Show the existing wrong visual feedback at the clicked cell.
+- Play the existing wrong buzz when note sound is enabled.
+- Record wrong-cell progress through the existing progress system.
+- Keep the active target’s startedAt and durationMs unchanged.
+- Do not remove a life.
+- Do not alter the run timer.
+- Do not spawn a replacement target.
+- Do not add a new feedback system.
+
+Audio behavior:
+- Correct target click may continue playing the fretboard note as currently designed.
+- An incorrect click, including wrong string, should use the existing wrong buzz.
+- Do not play the target note for a wrong-string click.
+
+Progress behavior:
+- Record the clicked wrong cell accurately.
+- Inspect the current `recordWrongTargetCellProgress` signature.
+- If it assumes the target string, minimally update it or call the correct existing lower-level function so the actual clicked string and fret are recorded.
+- Do not falsely attribute a wrong-string click to the target string.
+
+CORRECTION 3: SURVIVAL-SPECIFIC RESULTS HIERARCHY
+
+Timed Trial:
+- Preserve the current Fluency-led results hierarchy unless a tiny consistency change is required.
+- Continue showing Fluency Score prominently.
+- Continue using Fluency best celebration.
+
+Survival:
+- Primary number remains survival duration.
+- Primary label remains “Survival Time.”
+- Primary achievement celebration must be:
+  - “New Survival Best” when the run sets a new Survival personal best.
+  - Otherwise show “Best Survival” with the best duration.
+- Do not place the fluency label directly beneath the survival duration as though it describes that duration.
+- Show Fluency Score and fluency label as secondary information, for example in a compact secondary line or result stat.
+- Keep Notes Found visible.
+- Keep Accuracy, Wrong Taps, Misses, and Best Streak.
+- Do not add another large card or decorative section.
+- Preserve compact phone-landscape behavior.
+
+The result screen should answer immediately:
+- Timed Trial: “How fluent and fast was I?”
+- Survival: “How long did I survive?”
+
+MOTIVATION COPY
+
+Inspect the current motivation helper inputs.
+
+For Survival:
+- Ensure `isNewPersonalBest` refers to Survival duration best, not score best.
+- Do not show score-oriented “new best” copy when only raw score improved but survival duration did not.
+- Keep changes small.
+- Do not create a new copy engine.
+
+TESTS
+
+Add or update focused tests covering at minimum:
+
+Personal-best logic:
+- Timed Trial higher score is a new personal best.
+- Timed Trial equal or lower score is not.
+- Survival longer duration is a new personal best.
+- Survival shorter duration is not, even with a higher score.
+- Survival equal duration follows the supported tie-break behavior.
+- Result object and completion path use the same personal-best determination.
+
+Wrong-string feedback:
+- Wrong-string click increments wrong count.
+- Wrong-string click resets combo.
+- Wrong-string click does not remove a life.
+- Wrong-string click does not change target startedAt or durationMs.
+- Wrong-string click plays wrong buzz when sound is enabled.
+- Wrong-string click does not play the correct fretboard note.
+- Wrong-string click records the actual clicked string and fret in progress data.
+- Correct clicks still use the existing correct audio/progress path.
+
+Survival results:
+- Survival shows “Survival Time.”
+- New duration best shows “New Survival Best.”
+- Non-best Survival run shows “Best Survival” with duration.
+- Fluency remains visible but secondary.
+- Survival does not show “New best Fluency” as its primary badge.
+- Timed Trial Fluency presentation remains unchanged.
+- Play Again remains the primary action.
+
+Regression coverage:
+- Timed Trial still ends at zero.
+- Survival still ends on the third unanswered target.
+- Wrong answers still do not restart target travel.
+- HorizontalPlayGate behavior remains unchanged.
+- Reduced-motion behavior remains unchanged.
+- Focus Practice remains functional.
+- Mode persistence remains functional.
+
+LIKELY FILES
+
+Inspect the repository before deciding exact files.
+
+Likely:
+- src/features/fretboardDrop/FretboardDropGame.tsx
+- src/features/fretboardDrop/dropGameUtils.ts if a small pure helper belongs there
+- src/features/fretboardDrop/dropGameTypes.ts only if a minimal state/result field is necessary
+- src/features/fretboardDrop/dropCellProgress.ts only if actual clicked string/fret cannot currently be recorded correctly
+- focused Fretboard Drop tests
+- index.css only if a tiny existing-class adjustment is required for results hierarchy
+
+DO NOT
+
+- Rewrite the reducer.
+- Change target speed balancing.
+- Change Play Gate visuals.
+- Add particles or animations.
+- Add another game clock.
+- Add a generalized achievement framework.
+- Add packages.
+- Add backend, database, auth, leaderboard, microphone input, payments, achievements, power-ups, or multiplayer.
+- Change unrelated GuitarRise or Transcribe features.
+- Alter Timed Trial and Survival core rules beyond these corrections.
+
+REQUIRED CHECKS
+
+Run:
+- Focused Fretboard Drop tests covering the changed files
+- npm run typecheck
+- npm run build
+- git diff --check
+
+Do not run browser automation, Playwright, live preview testing, or screenshot testing.
+
+MANUAL CHECKLIST TO REPORT
+
+Report that I should manually verify:
+- Wrong-string clicks immediately feel responsive.
+- Wrong-string clicks produce wrong sound, not note sound.
+- Wrong-string clicks do not restart or jump the pick.
+- Survival celebrates a new duration record as “New Survival Best.”
+- A higher Survival score with a shorter duration does not show a new personal best.
+- Fluency is still visible in Survival but clearly secondary.
+- Timed Trial results remain Fluency-led.
+- Phone landscape remains readable.
+- Play Again repeats the same mode.
+- Play Gate and reduced-motion feedback remain unchanged.
+
+FINAL RESPONSE FORMAT
+
+End with:
+1. Root-problem answer.
+2. Chosen architecture and why.
+3. Files changed.
+4. Personal-best rule implemented.
+5. Wrong-string feedback behavior.
+6. Timed Trial results behavior.
+7. Survival results behavior.
+8. Tests and checks run with exact results.
+9. Manual checks for me to perform.
+10. Any known limitation.
+
+End the final response with exactly:
+TASK COMPLETE
+
+Only use:
+TASK INCOMPLETE
+
+if requested work, tests, typecheck, build, or git diff --check did not complete successfully. Include the exact blocker or remaining work.

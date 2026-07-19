@@ -1,0 +1,532 @@
+FRETBOARD DROP
+NAME THE NOTE PREMIUM VISUAL POLISH PASS
+
+MODEL RECOMMENDATION
+Model: Terra
+Effort: High
+Speed: Standard
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+PRIMARY GOAL
+
+Polish the active Name the Note gameplay screen so it feels like a premium, exciting, App Store-ready guitar game rather than a clean quiz interface.
+
+The current layout and target-centered countdown are working, but the screen still feels visually flat:
+
+- the target looks like a plain cyan circle
+- the final-second target motion swings or wobbles and feels toy-like
+- the fretboard is clear but visually flat
+- the answer panel still feels like a separate form card
+- the A-G buttons are generic
+- the HUD is functional but sparse
+- the overall screen lacks a distinctive visual identity
+
+This task is a focused visual polish pass only.
+
+ARE WE SOLVING THE ROOT PROBLEM, OR JUST PATCHING THE CURRENT ARCHITECTURE?
+
+Solve the root problem.
+
+Do not merely add more glow, change the circle color, or increase animation.
+
+The root problem is that the screen lacks one coherent premium visual identity and a satisfying visual hierarchy.
+
+The intended direction is:
+
+PREMIUM DARK GUITAR ARCADE
+
+- warm, dimensional fretboard
+- cool cyan guitar-pick gem target
+- amber urgency
+- green success
+- restrained glow
+- precise geometry
+- minimal motion
+- clear hierarchy
+- no wobbling or cartoonish movement
+
+DESIGN PRINCIPLES
+
+STEVE KRUG
+
+- The player should immediately see the target and know the next action.
+- Motion must never make the exact fret or string harder to read.
+- Feedback states must be obvious without explanation.
+- Keep answer choices easy to scan.
+- Do not add visual clutter or competing focal points.
+
+STEVE JOBS
+
+- The screen should feel intentional, distinctive, and emotionally clear.
+- Create delight through proportion, material, lighting, and feedback, not feature accumulation.
+- Do fewer things better.
+- The guitar-pick target should become the visual signature of the mode.
+- Restraint is more premium than excessive effects.
+
+ROB PIKE AND KEN THOMPSON
+
+- Prefer the smallest clear implementation.
+- Use existing semantic state and CSS.
+- Do not add another animation engine, renderer, dependency, or state machine.
+- Keep gameplay rules separate from visual presentation.
+- Avoid duplicate geometry or duplicated calculations.
+- Do not overcomplicate.
+
+EDWARD TUFTE
+
+- Increase useful visual signal.
+- The string, fret, target, timer, score, streak, and answer choices must remain legible.
+- Decorative layers must never obscure musical information.
+- Avoid noisy textures and excessive effects.
+
+FILES TO INSPECT FIRST
+
+Inspect the current repository state before editing. Likely files include:
+
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.tsx`
+- `src/features/fretboardDrop/nameTheNote/NameTheNoteGame.test.tsx`
+- `src/index.css`
+- any existing target, button, HUD, or animation utility used by Name the Note
+
+Do not broadly reread unrelated documentation or modify unrelated modes.
+
+CURRENT STATE TO PRESERVE
+
+The current implementation already includes:
+
+- responsive active-run layout
+- safe-area handling
+- target-centered countdown
+- longer timeout reveal
+- correct, wrong, and timeout feedback
+- stable A-G answer buttons
+- shuffled target selection
+- scoring and streak logic
+- Run Points and Fluency
+- keyboard controls
+- setup, results, and persistence
+
+Preserve all of that unless this prompt explicitly requests a visual change.
+
+SCOPE
+
+Change only the active Name the Note gameplay screen and the smallest supporting CSS or test code required.
+
+Do not change:
+
+- target generation
+- shuffled deck behavior
+- note-answer logic
+- retry behavior
+- run duration
+- question duration
+- correct-answer delay
+- timeout reveal duration
+- scoring formula
+- streak rules
+- Fluency calculations
+- persistence
+- setup screen behavior
+- results behavior
+- keyboard controls
+- Free Play
+- Guided Learning
+- original Fretboard Drop mode
+- proportional fret spacing
+- current responsive layout
+- safe-area handling
+- stored data formats
+
+Do not add:
+
+- backend
+- auth
+- database
+- analytics
+- sound
+- haptics
+- particles
+- combo systems
+- screen shake
+- new scoring
+- new persistence
+- Canvas
+- SwiftUI
+- animation libraries
+- browser automation
+- Playwright
+- screenshot testing
+- live-preview automation
+
+REQUIRED IMPLEMENTATION OUTCOMES
+
+1. REMOVE THE SWINGING OR WOBBLING TARGET MOTION
+
+Remove any target animation that swings, rotates, rocks, translates, or visibly shifts the marker during the final second.
+
+The target must remain locked to the exact string and fret at all times.
+
+Replace the motion with restrained urgency:
+
+- small scale pulse, approximately 1.00 to 1.04 or 1.05
+- stronger ring or halo glow
+- amber shift during the final second
+- no lateral movement
+- no rotation
+- no bouncing
+- no screen movement
+
+Respect `prefers-reduced-motion`.
+
+2. REDESIGN THE TARGET AS A GUITAR-PICK GEM
+
+Replace the plain circular target body with a distinctive guitar-pick-shaped gem.
+
+Use the simplest reliable approach:
+
+Preferred order:
+
+1. CSS-only pick silhouette using border-radius and transform or clip-path
+2. small inline SVG component if CSS cannot achieve a clean shape
+3. existing true transparent asset only if the repository already contains one verified to have a transparent background
+
+Do not introduce a new external image dependency.
+
+Do not reuse any prior asset with a baked-in checkerboard or opaque background.
+
+The target should include restrained layers:
+
+- soft outer halo
+- countdown ring
+- pick-shaped body
+- subtle faceted or glass-like gradient
+- small specular highlight near the upper edge
+- slightly darker lower edge
+- subtle inner shadow
+- small center contact dot or string-contact mark
+
+The pick should:
+
+- read clearly at small iPhone size
+- remain centered in the same logical target cell
+- not change hit detection or target identity
+- not clip on strings 1 or 6
+- stay visually precise
+- avoid excessive 3D or cartoon styling
+
+The countdown ring should remain visually separate from the pick body and continue to show time clearly.
+
+3. REFINE TARGET STATES
+
+IDLE
+
+- cool cyan pick body
+- subtle dimensional highlight
+- clear countdown ring
+- steady position
+
+FINAL SECOND
+
+- ring shifts toward amber
+- restrained halo or scale pulse
+- no swinging or translation
+
+CORRECT
+
+- pick flashes or transitions green
+- brief bright rim
+- subtle outward ripple or halo expansion
+- existing `+points` feedback remains visible
+- no large particle burst
+
+WRONG ANSWER
+
+- target remains cyan and steady
+- do not make the target shake
+- wrong feedback remains on the selected answer button
+- correct answer is not revealed
+
+TIMEOUT
+
+- pick changes to amber or restrained red
+- correct note remains clearly visible during the full timeout reveal
+- correct answer button remains highlighted
+- target stays fixed on the exact position
+
+4. ADD RESTRAINED FRETBOARD DEPTH
+
+The fretboard currently reads clearly but looks flat.
+
+Improve it without introducing image textures or visual noise.
+
+Use subtle CSS treatments such as:
+
+- restrained wood tonal variation
+- very faint wood-grain suggestion using low-contrast gradients
+- slightly stronger nut depth
+- cleaner metallic fret highlights
+- more visible but still subtle string gauge differences
+- faint neck-edge vignette or inner shadow
+- restrained local light falloff near the active target
+
+Guardrails:
+
+- do not obscure strings or fret lines
+- do not create a busy wood texture
+- do not reduce contrast
+- do not make the neck look photorealistic
+- target remains the strongest visual element
+- preserve responsive geometry and current fret spacing
+
+5. BETTER INTEGRATE THE ANSWER PANEL
+
+The answer panel should feel connected to the fretboard rather than like a separate form card.
+
+Refine:
+
+- vertical gap between fretboard and panel
+- panel border weight
+- panel shadow
+- empty padding above the answer buttons
+- panel width relative to the fretboard
+- alignment with the active playing area
+
+Preferred direction:
+
+- slightly reduce the gap
+- soften the outer border
+- reduce unnecessary top padding
+- maintain a bounded width to avoid excessive pointer travel
+- optionally use a very subtle shared cyan glow or visual bridge
+
+Do not stretch the panel to full fretboard width.
+
+Do not change the A-G order.
+
+Do not reduce touch target size below comfortable mobile use.
+
+6. GIVE ANSWER BUTTONS MORE PHYSICAL CHARACTER
+
+Refine the A-G buttons so they feel like responsive game controls rather than generic form buttons.
+
+DEFAULT
+
+- dark raised surface
+- subtle top highlight
+- slightly darker lower edge
+- restrained cyan border or accent
+- clear note letter
+
+HOVER OR FOCUS
+
+- slightly brighter border
+- subtle lift or highlight
+- preserve keyboard focus visibility
+
+PRESS
+
+- compact press-down response
+- no large movement
+
+CORRECT
+
+- green rim and restrained green fill
+- brief success emphasis
+
+WRONG
+
+- red edge flash or small shake if already implemented
+- then dimmed unavailable state
+- do not rely on color alone
+
+TIMEOUT CORRECT ANSWER
+
+- correct button lights green during the reveal
+
+Respect reduced motion.
+
+7. REFINE HUD BALANCE
+
+Keep the HUD simple.
+
+Refine:
+
+- Run Points prominence
+- spacing among Run Points, Streak, and Best
+- timer separation on the right
+- number alignment
+- subtle score and streak state transitions
+- overall balance on wide screens
+
+Do not add:
+
+- another progress meter
+- combo meter
+- extra labels
+- new statistics
+- decorative badges
+
+The HUD should remain compact and readable on small phones.
+
+8. MAINTAIN VISUAL HIERARCHY
+
+The intended order of attention is:
+
+1. target pick gem
+2. exact string and fret
+3. countdown ring
+4. answer buttons
+5. Run Points and Streak
+6. supporting fret markers and labels
+
+Review the final styles against this hierarchy.
+
+Do not let HUD, wood texture, button glow, or answer panel border compete with the target.
+
+9. ACCESSIBILITY
+
+- preserve keyboard controls
+- preserve focus states
+- respect `prefers-reduced-motion`
+- preserve semantic answer states
+- do not rely on color alone
+- maintain readable contrast
+- keep target and answer states understandable without animation
+
+10. RESPONSIVE QUALITY
+
+Verify the design remains strong at:
+
+- approximately 375 x 667
+- approximately 390 x 844
+- approximately 430 x 932
+- desktop width
+- narrow landscape sanity check
+
+Do not reintroduce:
+
+- clipping
+- outer-string offset
+- overflow
+- excessive dead space
+- tiny answer buttons
+- viewport ownership problems
+
+TEST REQUIREMENTS
+
+Update focused tests only where meaningful.
+
+Protect behavioral and semantic contracts such as:
+
+- target marker remains in the same target cell
+- target identity does not change
+- no swinging or translation state is required for urgency
+- countdown fraction still reaches the target
+- correct, wrong, and timeout states remain distinct
+- all A-G buttons remain ordered and accessible
+- timeout reveal behavior remains unchanged
+- keyboard controls still work
+- no gameplay or persistence behavior changed
+
+Do not assert long Tailwind class strings.
+
+Do not write screenshot tests.
+
+VALIDATION
+
+Do not use browser automation, Playwright, screenshot comparison, or live-preview automation. I will manually inspect the result.
+
+Run:
+
+- `pnpm run typecheck`
+- `pnpm run test`
+- `pnpm run build`
+
+Use established repository equivalents if different.
+
+ENGINEERING REVIEW
+
+Before editing, compare:
+
+OPTION 1: SMALL STYLE PATCH
+
+Examples:
+
+- add more glow
+- change circle color
+- stronger pulse
+
+This is insufficient because the target still lacks a distinctive identity.
+
+OPTION 2: FOCUSED PREMIUM VISUAL REFACTOR
+
+Expected best choice:
+
+- remove swinging
+- guitar-pick gem target
+- restrained target states
+- subtle fretboard depth
+- integrated answer panel
+- physical answer buttons
+- balanced HUD
+
+Prefer this.
+
+OPTION 3: BROAD GAME ART SYSTEM
+
+Examples:
+
+- particles
+- sound
+- haptics
+- complex textures
+- asset pipeline
+- animation framework
+
+Reject this for now as overkill.
+
+GUARDRAILS
+
+- Keep changes localized.
+- Do not change business logic.
+- Do not change timing constants.
+- Do not change scoring.
+- Do not change persistence.
+- Do not change target geometry.
+- Do not add new dependencies unless absolutely unavoidable.
+- Do not introduce opaque or checkerboard image assets.
+- Do not add per-device offsets.
+- Do not make the target less precise.
+- Do not overdecorate.
+- Do not commit or push unless explicitly instructed.
+
+FINAL RESPONSE FORMAT
+
+Report:
+
+1. Root visual problem confirmed
+2. Files changed
+3. How target swinging was removed
+4. Guitar-pick gem implementation
+5. Target visual states
+6. Fretboard depth refinements
+7. Answer panel integration
+8. Answer button refinements
+9. HUD refinements
+10. Accessibility and reduced-motion handling
+11. What was deliberately preserved
+12. Typecheck, test, and build results
+13. Manual checks for the user
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if all requested changes and checks are finished.
+
+Otherwise end with:
+
+TASK INCOMPLETE
+
+Then state the exact blocker or remaining work.

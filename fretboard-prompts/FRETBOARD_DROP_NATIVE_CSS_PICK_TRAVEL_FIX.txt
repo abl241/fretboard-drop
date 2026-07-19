@@ -1,0 +1,380 @@
+FRETBOARD DROP
+REPLACE BROKEN REACT-DRIVEN PICK MOTION WITH NATIVE CSS TRAVEL
+
+MODEL RECOMMENDATION
+Model: Terra
+Effort: High
+Speed: Normal
+
+Read and execute this prompt from the repository's `fretboard-prompts/` folder.
+
+PRIMARY GOAL
+
+Fix the original Fretboard Drop horizontal-deadline game so the note pick visibly and smoothly travels from the left side of the stage to the deadline.
+
+The previous single-clock repair did not fix the real browser behavior. The pick still stays near the start position and then pops.
+
+Do not add diagnostics, temporary overlays, instrumentation, console logging, or browser probes. Do not waste time measuring the existing broken visual path.
+
+Instead, replace the fragile presentation mechanism with a simpler platform-native one.
+
+ARE WE SOLVING THE ROOT PROBLEM, OR JUST PATCHING THE CURRENT ARCHITECTURE?
+
+Solve the root problem.
+
+The existing visible travel depends on React repeatedly rerendering small `left` changes from target progress.
+
+That has proven unreliable in the real browser even though unit tests show progress values changing.
+
+The repair should separate responsibilities cleanly:
+
+- React/reducer owns target identity, start time, duration, hit, miss, score, lives, and game state
+- CSS owns smooth visual travel from the start position to the deadline over the target's existing duration
+
+Do not reintroduce a second gameplay clock.
+
+ENGINEERING OPTIONS
+
+OPTION 1: KEEP PER-FRAME REACT POSITION UPDATES
+
+Reject.
+
+It has already failed in the real browser.
+
+OPTION 2: NATIVE CSS TRAVEL ANIMATION
+
+Use this.
+
+- one mounted target
+- one CSS animation
+- duration comes from `target.durationMs`
+- browser performs continuous movement
+- reducer still decides hits and misses
+
+OPTION 3: IMPERATIVE DOM REQUESTANIMATIONFRAME LOOP
+
+Reject unless CSS animation is genuinely impossible.
+
+It adds more code and another manual animation path.
+
+PIKE / THOMPSON PRINCIPLES
+
+- Use the platform feature designed for the job.
+- One target should have one lifecycle.
+- Do not update visual position through React every frame.
+- Do not add state that duplicates elapsed time or progress.
+- Keep gameplay timing authoritative in the reducer.
+- Keep presentation simple and independent.
+- Remove obsolete code after the replacement.
+- Avoid abstractions, dependencies, services, and clever synchronization.
+
+KRUG PRINCIPLES
+
+- The pick must visibly approach the deadline.
+- Motion must be continuous and obvious.
+- The displayed motion must match the player's time to answer.
+- Do not change the controls, labels, or core interaction.
+
+JOBS PRINCIPLES
+
+- Restore the essential magical interaction.
+- Motion should be smooth, direct, and intentional.
+- Use fewer moving parts.
+- Preserve the current visual style and game identity.
+- Do not hide the bug with decorative effects.
+
+FILES TO INSPECT
+
+Likely:
+
+- `src/features/fretboardDrop/HorizontalDeadlineStage.tsx`
+- `src/features/fretboardDrop/FretboardDropGame.tsx`
+- `src/index.css`
+- focused horizontal-stage and game tests
+
+Do not modify Name the Note.
+
+REQUIRED IMPLEMENTATION
+
+1. OUTER TRAVEL WRAPPER
+
+Refactor the active horizontal pick so an outer wrapper controls horizontal travel.
+
+The outer wrapper must:
+
+- mount once per target
+- use `key={target.id}` or equivalent stable target identity
+- begin at the configured pick start percentage
+- end at the configured deadline percentage
+- animate linearly
+- use the target's existing `durationMs`
+- use CSS animation fill mode so it starts and ends predictably
+
+Do not update the wrapper's `left` or transform every frame from React.
+
+2. INNER VISUAL PICK
+
+Keep the existing pick shape, note text, glow, and final-second styling on an inner element.
+
+Travel animation and decorative animation must be on different DOM layers.
+
+Required separation:
+
+- outer element: horizontal travel only
+- inner element: pick body, glow, final-second pulse, correct-resolution appearance
+
+This prevents one CSS `animation` declaration from replacing another.
+
+3. CSS CUSTOM PROPERTIES
+
+Pass only stable per-target values through CSS custom properties, such as:
+
+- `--pick-start-percent`
+- `--pick-end-percent`
+- `--pick-duration-ms`
+
+Example direction:
+
+```tsx
+style={{
+  "--pick-start-percent": `${PICK_START_RIGHT_PERCENT}%`,
+  "--pick-end-percent": `${DEADLINE_RIGHT_PERCENT}%`,
+  "--pick-duration-ms": `${target.durationMs}ms`,
+  width: sizePx,
+  height: sizePx,
+  color: accent.color,
+} as React.CSSProperties}
+```
+
+Use the repository's TypeScript style conventions.
+
+4. NATIVE TRAVEL ANIMATION
+
+Add a dedicated keyframe:
+
+```css
+@keyframes horizontal-deadline-travel {
+  from {
+    left: var(--pick-start-percent);
+  }
+
+  to {
+    left: var(--pick-end-percent);
+  }
+}
+```
+
+Apply it only to the active travel wrapper:
+
+```css
+.horizontal-deadline-pick-travel--active {
+  animation: horizontal-deadline-travel var(--pick-duration-ms) linear both;
+}
+```
+
+Alternative use of `transform: translateX(...)` is acceptable if it is simpler and preserves exact start and deadline geometry.
+
+Do not use a transition.
+
+Do not feed a new target position every frame.
+
+5. RESOLVED AND MISS STATES
+
+Do not apply active travel animation to:
+
+- resolved-correct snapshot
+- miss impact fragments
+- timeout or miss reveal elements
+
+Those should remain positioned from their existing resolved progress snapshot or deadline location.
+
+6. GAMEPLAY REMAINS REDUCER-DRIVEN
+
+Keep reducer timing and miss logic unchanged.
+
+The reducer remains authoritative for:
+
+- active target
+- startedAt
+- durationMs
+- progress calculations used by hit/miss logic
+- score
+- combo
+- lives
+- target removal
+- next target spawning
+
+CSS animation is presentation only.
+
+7. START-TIME ALIGNMENT
+
+The active pick should mount at the same moment the target is created.
+
+Do not add arbitrary delays.
+
+Do not add a second timer.
+
+If the component can mount after a meaningful elapsed interval because of existing rendering flow, use a one-time negative animation delay derived from existing elapsed time at mount.
+
+Only do this if needed.
+
+Do not continuously update animation delay.
+
+8. REMOVE OBSOLETE PER-FRAME VISUAL POSITIONING
+
+For the active traveling pick:
+
+- stop applying inline `left` from current progress
+- stop relying on React rerenders for visible movement
+
+Progress may still be computed for:
+
+- urgency state
+- hit/miss logic
+- data attributes used by tests
+- resolved snapshots
+
+Do not remove reducer ticks.
+
+9. REDUCED MOTION
+
+The target must still move in reduced-motion mode because travel is essential game information.
+
+Reduced motion may disable:
+
+- glow pulsing
+- fragment motion
+- decorative scaling
+
+Reduced motion must not disable horizontal travel.
+
+10. PRESERVE CURRENT GEOMETRY
+
+Keep:
+
+- current start percentage
+- current deadline percentage
+- current pick size
+- current deadline position
+- current visual design
+- current speed-mode durations
+
+Do not introduce per-screen offsets.
+
+TEST REQUIREMENTS
+
+Add or update focused tests that protect architecture and behavior.
+
+1. ACTIVE TARGET GETS NATIVE TRAVEL CONTRACT
+
+Verify:
+
+- active target wrapper has the expected target-specific key behavior where testable
+- CSS variables include start, end, and duration
+- active wrapper uses the travel class
+- inline per-frame `left` is no longer used for the active pick
+
+2. DURATION MATCHES GAMEPLAY
+
+Verify the CSS duration equals the active target's existing `durationMs`.
+
+3. TARGET REPLACEMENT RESTARTS TRAVEL
+
+After a correct hit or miss resolution, the next target must mount as a new travel element and begin at the start position.
+
+4. NORMAL AND FOCUS MODE
+
+Protect both normal play and Focus Practice.
+
+5. MISS AND HIT LOGIC
+
+Preserve existing reducer tests for:
+
+- correct hit
+- wrong hit
+- miss at progress >= 1
+- life loss
+- spawning next target
+
+6. REDUCED MOTION
+
+Verify reduced-motion mode still retains the travel class or native movement contract.
+
+Do not add screenshot tests.
+
+Do not assert huge class strings.
+
+SCOPE GUARDRAILS
+
+Do not change:
+
+- target generation
+- target durations
+- speed modes
+- lives
+- scoring
+- combo
+- hit detection
+- miss timing
+- sound
+- analytics
+- persistence
+- results
+- fretboard layout
+- Name the Note
+- Guided Learning
+- visual theme
+
+Do not add:
+
+- diagnostics
+- debug overlays
+- console logs
+- animation library
+- Canvas
+- backend
+- auth
+- database
+- new global state
+- new requestAnimationFrame loop
+- browser automation
+- Playwright
+- screenshot testing
+- live-preview automation
+
+VALIDATION
+
+Run:
+
+- `pnpm run typecheck`
+- `pnpm run test`
+- `pnpm run build`
+
+Do not run browser automation.
+
+FINAL RESPONSE FORMAT
+
+Report:
+
+1. Files changed
+2. How React per-frame positioning was removed
+3. Native travel wrapper implementation
+4. Separation of travel and decorative animation
+5. Target duration alignment
+6. Resolved and miss-state handling
+7. Reduced-motion behavior
+8. What was deliberately preserved
+9. Typecheck, test, and build results
+10. Manual checks for the user
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if all code changes and required checks pass.
+
+Otherwise end with:
+
+TASK INCOMPLETE
+
+Then state the exact blocker.

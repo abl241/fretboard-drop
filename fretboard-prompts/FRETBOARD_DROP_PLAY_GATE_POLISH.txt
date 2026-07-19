@@ -1,0 +1,519 @@
+# Fretboard Drop: Replace the Ordinary Deadline Line with a Polished Guitar-Themed Play Gate
+
+## Codex recommendation
+
+- Model: Terra
+- Effort: Medium
+- Speed: Normal
+
+## Codex instructions
+
+### Goal
+
+Make the Fretboard Drop horizontal note-finding stage feel more game-like, exciting, polished, and worthy of a paid App Store product by replacing the ordinary deadline line with a guitar-themed Play Gate and improving the visual payoff of correct hits.
+
+### Prompt location
+
+Read and execute this prompt from:
+
+`fretboard-prompts/FRETBOARD_DROP_PLAY_GATE_POLISH.txt`
+
+### Run this in Codex
+
+```text
+Read and execute:
+
+fretboard-prompts/FRETBOARD_DROP_PLAY_GATE_POLISH.txt
+
+Stay strictly within the prompt scope. Run the requested focused tests, typecheck, build, and git diff check. Do not run browser automation, Playwright, live preview testing, or screenshot testing.
+
+End with TASK COMPLETE only if all requested work and checks are finished. Otherwise end with TASK INCOMPLETE and state the exact blocker.
+```
+
+---
+
+## Root-problem review
+
+Explicitly answer in the final report:
+
+**Are we solving the root problem, or just patching the current architecture?**
+
+The root problem is not merely that the current deadline is too thin. The gameplay destination is visually weak and generic. The player sees a polished guitar-pick target moving toward what looks like a measuring bracket, but the endpoint does not communicate action, musical identity, anticipation, or reward.
+
+The solution should turn the endpoint into a clear, polished, guitar-specific Play Gate using the existing renderer, progress value, cue state, combo, and reduced-motion support.
+
+Do not change gameplay timing or architecture.
+
+---
+
+## Fresh repository findings
+
+Review the current implementation before editing, especially:
+
+- `src/features/fretboardDrop/HorizontalDeadlineStage.tsx`
+- `src/index.css`
+- `src/features/fretboardDrop/FretboardDropGame.test.tsx`
+- `src/features/fretboardDrop/dropGameTypes.ts`
+- `src/features/fretboardDrop/dropGameUtils.ts`
+
+Current behavior to preserve:
+
+- The pick position is derived directly from `getTargetProgress`.
+- `DEADLINE_RIGHT_PERCENT` currently defines the deadline location.
+- The stage already knows:
+  - active progress
+  - final-second state
+  - correct cue
+  - tier-up cue
+  - miss cue
+  - combo
+  - reduced-motion preference
+- Correct resolution currently fades the pick.
+- Miss resolution currently shows fragments.
+- The component already has one shared gameplay clock and should keep it.
+- Existing timing, scoring, hit detection, reducer logic, run formats, speed modes, focus practice, sound, persistence, analytics, results, and fretboard rendering must remain unchanged.
+
+---
+
+## Architecture review
+
+Before implementation, compare these options briefly in the final report:
+
+### Option 1: Small CSS patch
+
+Make the current line thicker and brighter.
+
+- Lowest complexity
+- Low maintenance
+- Low risk
+- Still generic
+- Does not fully solve the weak gameplay-destination problem
+
+### Option 2: Focused Play Gate component, recommended
+
+Replace the line with a small guitar-themed Play Gate subcomponent driven by existing state.
+
+- Low to moderate complexity
+- Clear maintenance
+- No new packages
+- No new animation clock
+- Strong visual payoff
+- Preserves current gameplay architecture
+
+### Option 3: Full reusable effects engine
+
+Add particles, screen shake, Canvas/WebGL, and generalized effect orchestration.
+
+- High complexity
+- Higher maintenance
+- Greater mobile-performance and accessibility risk
+- Overkill at the current stage
+
+Implement Option 2 unless repository evidence strongly contradicts it.
+
+---
+
+## Product direction
+
+The Play Gate should feel like a restrained hybrid of:
+
+- guitar pickup
+- amplifier meter
+- arcade strike zone
+- musical timing gate
+
+It should not look like:
+
+- a generic sci-fi portal
+- a laser wall
+- a neon rectangle
+- a literal realistic guitar pickup
+- a decorative effect disconnected from gameplay
+
+The player should understand immediately:
+
+**The pick is moving toward the energized place where it must be resolved.**
+
+---
+
+## Required implementation
+
+### 1. Replace the ordinary line with a Play Gate subcomponent
+
+Create a focused renderer such as:
+
+```ts
+function HorizontalPlayGate(...)
+```
+
+or an equivalent clearly named component within the existing feature.
+
+Use the same existing deadline position:
+
+```ts
+DEADLINE_RIGHT_PERCENT
+```
+
+Do not alter pick travel geometry or timing.
+
+The Play Gate should visually include:
+
+- two restrained vertical energy rails
+- a narrow translucent strike zone between the rails
+- compact top and bottom caps with subtle guitar-pickup hardware character
+- a brighter central contact point aligned with the pick path
+- controlled cyan ambient glow
+- enough contrast to read immediately without overpowering the fretboard
+
+Avoid excessive labels.
+
+A permanent `PLAY` label is not required. Prefer visual clarity over explanatory text.
+
+### 2. Add explicit visual gate states
+
+Use existing progress and cue data to drive these states:
+
+- `idle`
+- `approach`
+- `urgent`
+- `correct`
+- `miss`
+
+Suggested mapping:
+
+- idle: progress below approximately 0.65
+- approach: progress approximately 0.65 to 0.80
+- urgent: progress above approximately 0.80 or final-second state
+- correct: correct or tier-up cue
+- miss: miss cue
+
+Keep thresholds simple and local to the renderer.
+
+Do not add a new global state machine.
+
+### 3. Idle state
+
+The gate should look polished but calm:
+
+- slim cyan rails
+- dark translucent center
+- faint center contact point
+- low ambient glow
+- no constant distracting pulse
+
+### 4. Approach state
+
+As the pick gets closer:
+
+- slightly strengthen the glow
+- subtly brighten the contact point
+- add one restrained inward energy or charge effect
+- make the destination feel more alive without flashing
+
+Do not animate the whole screen.
+
+### 5. Urgent state
+
+During the final approach:
+
+- gate glow should intensify
+- center contact point should become more visible
+- one controlled pulse is acceptable
+- keep the note readable
+- do not create a separate timing clock
+
+Use the existing final-second/progress logic only.
+
+### 6. Correct response
+
+Correct resolution must feel more rewarding than it does now.
+
+Current correct behavior is too subtle compared with the miss effect.
+
+Implement a brief, satisfying response such as:
+
+- pick dissolves or snaps into the gate
+- gate expands outward by a few pixels
+- short gold-cyan energy burst
+- one quick luminous ring or horizontal wave
+- brief contact flash
+- return rapidly to neutral
+
+Target duration:
+
+- approximately 180 to 260 milliseconds
+
+Keep it crisp.
+
+Do not add confetti on every answer.
+
+For tier-up or meaningful streak milestones, a slightly stronger version is acceptable, but do not add a new gameplay system.
+
+### 7. Miss response
+
+Preserve the existing miss fragment effect and anchor it visually to the Play Gate.
+
+Add:
+
+- warm orange/red overload flash
+- brief rail distortion or outward separation
+- fast return to neutral
+
+Avoid:
+
+- large screen shake
+- long red state
+- full-stage flashing
+
+### 8. Add a faint travel lane
+
+Add one subtle horizontal lane between the pick start region and the Play Gate.
+
+Requirements:
+
+- very low contrast
+- visually supports direction of travel
+- slightly brighter near or beneath the active pick if easy to do without extra state
+- must not resemble a progress bar
+- must not compete with the fretboard
+
+### 9. Add sparse timing markers
+
+Add no more than three faint vertical distance markers along the travel lane.
+
+Requirements:
+
+- no numbers
+- no labels
+- low opacity
+- simple
+- should improve motion perception
+- should not create a dense technical grid
+
+### 10. Preserve guitar identity
+
+The Play Gate should feel connected to the guitar theme through proportion, hardware-like caps, restrained metallic detail, and the existing cyan/amber visual language.
+
+Do not import or create a detailed image asset for this task.
+
+Use CSS and existing React markup only.
+
+### 11. Reduced motion
+
+Respect the existing reduced-motion behavior.
+
+When reduced motion is enabled:
+
+- no repeated pulsing
+- no large expansion
+- no fragment travel beyond what is already allowed
+- use opacity and brief color change instead
+- preserve clear correct/miss feedback
+
+Do not remove reduced-motion support.
+
+### 12. Responsive behavior
+
+Preserve:
+
+- desktop layout
+- tablet behavior
+- phone landscape compact sizing
+- deadline visibility
+- fretboard visibility
+- note readability
+
+The Play Gate must not become oversized on small screens.
+
+Keep the current deadline location and stage dimensions unless a tiny local adjustment is necessary.
+
+### 13. Accessibility
+
+The Play Gate is decorative.
+
+Keep it `aria-hidden`.
+
+Do not remove or alter:
+
+- active note prompt labeling
+- stage test IDs
+- pick test IDs
+- reduced-motion data attributes
+
+If the current deadline test ID is retained, update it to reference the new Play Gate root rather than delete it unless there is a strong reason otherwise.
+
+### 14. Tests
+
+Add or update focused tests that prove at minimum:
+
+1. The horizontal stage still renders.
+2. The Play Gate renders at the existing deadline location.
+3. The active pick position still maps from existing target progress.
+4. Idle state is applied for an early pick.
+5. Approach or urgent state is applied for a late pick.
+6. Correct cue produces the correct gate state.
+7. Tier-up cue uses the correct success state.
+8. Miss cue produces the miss gate state.
+9. Reduced-motion state remains exposed.
+10. Phone landscape sizing keeps the gate visible.
+11. Existing run-format, timing, spawn, and hit/miss tests still pass.
+
+Do not weaken timing tests.
+
+Do not rewrite broad test infrastructure for this visual task.
+
+---
+
+## Design principles
+
+### Steve Jobs
+
+Create one memorable visual idea.
+
+The Play Gate should become a signature interaction for Fretboard Drop, not one effect among many.
+
+The experience should feel intentionally designed for guitarists.
+
+### Steve Krug
+
+The destination must be obvious without instructions.
+
+The player should instantly understand where the pick is going and why it matters.
+
+### Edward Tufte
+
+Every visual element must communicate one of:
+
+- direction
+- distance
+- urgency
+- success
+- failure
+
+Remove decorative elements that do not serve those purposes.
+
+### Rob Pike and Ken Thompson
+
+Keep the existing data flow:
+
+```text
+performance.now()
+→ getTargetProgress()
+→ HorizontalDeadlineStage
+→ CSS visual state
+```
+
+Do not:
+
+- create a second animation clock
+- use animation callbacks to control gameplay
+- add Canvas
+- add WebGL
+- add an animation package
+- duplicate renderer logic
+- create a generalized effect framework
+
+Prefer direct markup, small pure helpers, and straightforward CSS.
+
+---
+
+## Guardrails
+
+Do not change:
+
+- target movement
+- deadline percentage
+- timing synchronization
+- reducer behavior
+- run-format behavior
+- speed modes
+- scoring
+- fluency calculation
+- target duration formulas
+- hit detection
+- wrong-answer behavior
+- miss timing
+- sound
+- localStorage
+- analytics
+- results
+- stats
+- fretboard geometry
+- focus practice
+- unrelated pages
+
+Do not add:
+
+- screen shake
+- confetti
+- full particle engine
+- Canvas
+- WebGL
+- animation libraries
+- new packages
+- image assets
+- new game mechanics
+- backend
+- auth
+- database
+
+---
+
+## Manual-test checklist to include in final report
+
+Provide concise manual checks for the user:
+
+1. Pick still moves to the exact same deadline location.
+2. Play Gate is immediately recognizable as the gameplay destination.
+3. Early approach remains calm.
+4. Final approach clearly increases urgency.
+5. Correct answers feel more satisfying than before.
+6. Misses flash clearly without overwhelming the screen.
+7. Success effect is at least as polished as the miss effect.
+8. Fretboard and note remain readable.
+9. Phone landscape remains usable.
+10. Reduced-motion mode remains clear and calm.
+11. Timed Trial and Survival behavior remain unchanged.
+12. No timing regression is visible.
+
+---
+
+## Required checks
+
+Run only:
+
+- focused Fretboard Drop tests
+- typecheck
+- production build
+- `git diff --check`
+
+Do not run:
+
+- Playwright
+- browser automation
+- live preview testing
+- screenshot testing
+
+The user will manually inspect the browser result.
+
+---
+
+## Final response format
+
+Report:
+
+1. Root-problem answer
+2. Architecture option comparison and chosen approach
+3. Files changed
+4. Play Gate behavior implemented
+5. Correct/miss visual behavior
+6. Reduced-motion and responsive handling
+7. Tests and checks run with outcomes
+8. Manual-test checklist
+9. Any limitations
+
+End with exactly:
+
+`TASK COMPLETE`
+
+Only use that marker if all requested implementation and checks are complete.

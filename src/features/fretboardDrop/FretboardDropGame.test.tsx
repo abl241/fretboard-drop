@@ -1,9 +1,23 @@
 import { act, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DROP_SPEED_MODE_STORAGE_KEY, getTargetProgress, writeBestDropScore } from "./dropGameUtils";
+import {
+  DEFAULT_DROP_PRACTICE_CONTEXT,
+  DROP_RUN_FORMAT_STORAGE_KEY,
+  DROP_SPEED_MODE_STORAGE_KEY,
+  createInitialDropState,
+  getDropSpeedModeConfig,
+  getTargetProgress,
+  writeBestDropScore,
+} from "./dropGameUtils";
 import { appendCompletedRunToHistory } from "./dropRunHistory";
-import { FretboardDropGame } from "./FretboardDropGame";
-import { HorizontalDeadlineStage, getHorizontalDeadlinePickRightPercent } from "./HorizontalDeadlineStage";
+import { FretboardDropGame, dropGameReducer } from "./FretboardDropGame";
+import type { DropFocusPoolCell, DropSpeedMode } from "./dropGameTypes";
+import {
+  DEADLINE_CONTACT_PERCENT,
+  HorizontalDeadlineStage,
+  PICK_START_CONTACT_PERCENT,
+  getHorizontalDeadlinePickContactPercent,
+} from "./HorizontalDeadlineStage";
 import {
   DROP_CELL_PROGRESS_STORAGE_KEY,
   LocalStorageCellProgressRepository,
@@ -31,6 +45,10 @@ function getPracticeNoteButton(note: string): HTMLElement {
 
 function getHorizontalDeadlinePick(state = "active"): HTMLElement {
   return screen.getAllByTestId("horizontal-deadline-pick").find((pick) => pick.getAttribute("data-state") === state)!;
+}
+
+function getHorizontalDeadlinePickTravel(state = "active"): HTMLElement {
+  return screen.getAllByTestId("horizontal-deadline-pick-travel").find((pick) => pick.getAttribute("data-state") === state)!;
 }
 
 function togglePracticeNote(note: string): void {
@@ -90,12 +108,166 @@ async function seedWeakFocusCell(): Promise<void> {
   await new LocalStorageCellProgressRepository().upsertCells([record]);
 }
 
+function startHorizontalReducerGame({
+  now = 1_000,
+  speedMode = "warm-up",
+  runMode = "normal",
+  runFormat = "timed-trial",
+  focusPool = [],
+}: {
+  now?: number;
+  speedMode?: DropSpeedMode;
+  runMode?: "normal" | "focus";
+  runFormat?: "timed-trial" | "survival";
+  focusPool?: readonly DropFocusPoolCell[];
+} = {}) {
+  return dropGameReducer(createInitialDropState(now), {
+    type: "start",
+    now,
+    bestScore: 0,
+    stringSelection: [0],
+    practiceContext: DEFAULT_DROP_PRACTICE_CONTEXT,
+    speedMode,
+    runFormat,
+    runMode,
+    focusPool,
+    isHorizontalMode: true,
+  });
+}
+
 describe("FretboardDropGame", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
     window.localStorage.clear();
+  });
+
+  it("keeps the active horizontal target unchanged after a wrong answer until its original deadline", () => {
+    let state = startHorizontalReducerGame();
+    const original = state.fallingTargets[0]!;
+    const wrongFret = original.fret === 0 ? 1 : 0;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: original.startedAt + 2_000,
+      stringIndex: original.stringIndex,
+      fret: wrongFret,
+      note: original.note,
+    });
+
+    expect(state.fallingTargets).toEqual([original]);
+    expect(getTargetProgress(state.fallingTargets[0]!, original.startedAt + 2_000)).toBeCloseTo(2_000 / original.durationMs);
+
+    state = dropGameReducer(state, { type: "tick", now: state.nextStreamSpawnAt + 1 });
+    expect(state.fallingTargets).toEqual([original]);
+
+    state = dropGameReducer(state, { type: "tick", now: original.startedAt + original.durationMs - 1 });
+    expect(state.fallingTargets).toEqual([original]);
+
+    state = dropGameReducer(state, { type: "tick", now: original.startedAt + original.durationMs });
+    expect(state.fallingTargets).toHaveLength(0);
+    expect(state.missReveal).not.toBeNull();
+  });
+
+  it("creates a fresh horizontal target after a correct answer, even after a long-lived wrong-answer target", () => {
+    let state = startHorizontalReducerGame();
+    const original = state.fallingTargets[0]!;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: original.startedAt + 3_000,
+      stringIndex: original.stringIndex,
+      fret: original.fret === 0 ? 1 : 0,
+      note: original.note,
+    });
+
+    const correctAt = original.startedAt + 5_000;
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: correctAt,
+      stringIndex: original.stringIndex,
+      fret: original.fret,
+      note: original.note,
+    });
+
+    const replacement = state.fallingTargets[0]!;
+    expect(state.fallingTargets).toHaveLength(1);
+    expect(replacement.id).not.toBe(original.id);
+    expect(replacement.startedAt).toBe(correctAt);
+    expect(getTargetProgress(replacement, correctAt)).toBe(0);
+  });
+
+  it("rebases the post-miss horizontal replacement to the miss-recovery action time", () => {
+    let state = startHorizontalReducerGame();
+    const original = state.fallingTargets[0]!;
+    const expiredAt = original.startedAt + original.durationMs;
+
+    state = dropGameReducer(state, { type: "tick", now: expiredAt });
+    const missReveal = state.missReveal!;
+    expect(state.nextStreamSpawnAt).toBeLessThan(expiredAt);
+
+    const recoveryAt = expiredAt + 520;
+    state = dropGameReducer(state, { type: "finish-miss-reveal", id: missReveal.id, now: recoveryAt });
+
+    const replacement = state.fallingTargets[0]!;
+    expect(state.fallingTargets).toHaveLength(1);
+    expect(replacement.startedAt).toBe(recoveryAt);
+    expect(getTargetProgress(replacement, recoveryAt)).toBe(0);
+    expect(state.nextStreamSpawnAt).toBeGreaterThan(recoveryAt);
+  });
+
+  it("creates fresh focus-practice replacements from the selected focus pool", () => {
+    const focusPool: readonly DropFocusPoolCell[] = [{
+      cellId: "standard:0:5",
+      note: "A",
+      stringIndex: 0,
+      fret: 5,
+      fluencyScore: 12,
+    }];
+    let state = startHorizontalReducerGame({ runMode: "focus", focusPool });
+    const original = state.fallingTargets[0]!;
+    const correctAt = original.startedAt + 1_500;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: correctAt,
+      stringIndex: original.stringIndex,
+      fret: original.fret,
+      note: original.note,
+    });
+
+    const replacement = state.fallingTargets[0]!;
+    expect(replacement).toMatchObject({
+      startedAt: correctAt,
+      note: focusPool[0].note,
+      stringIndex: focusPool[0].stringIndex,
+      fret: focusPool[0].fret,
+    });
+    expect(getTargetProgress(replacement, correctAt)).toBe(0);
+  });
+
+  it("uses a fresh replacement timestamp across every speed mode without changing configured durations", () => {
+    for (const speedMode of ["warm-up", "practice-tempo", "performance-tempo"] as const) {
+      let state = startHorizontalReducerGame({ speedMode });
+      const original = state.fallingTargets[0]!;
+      const correctAt = original.startedAt + 250;
+
+      state = dropGameReducer(state, {
+        type: "fret-click",
+        now: correctAt,
+        stringIndex: original.stringIndex,
+        fret: original.fret,
+        note: original.note,
+      });
+
+      const replacement = state.fallingTargets[0]!;
+      const speedConfig = getDropSpeedModeConfig(speedMode);
+      expect(replacement.startedAt).toBe(correctAt);
+      expect(getTargetProgress(replacement, correctAt)).toBe(0);
+      expect(replacement.durationMs).toBeGreaterThanOrEqual(speedConfig.minDurationMs);
+      expect(replacement.durationMs).toBeLessThanOrEqual(speedConfig.maxDurationMs);
+    }
   });
 
   it("shows practice strings on the start screen with high E selected by default", () => {
@@ -173,6 +345,7 @@ describe("FretboardDropGame", () => {
   });
 
   it("maps the active pick position from existing target progress", () => {
+    vi.spyOn(performance, "now").mockReturnValue(1_500);
     const target = {
       id: 7,
       targetKey: "standard:0:5" as const,
@@ -181,7 +354,7 @@ describe("FretboardDropGame", () => {
       stringIndex: 0 as const,
       fret: 5,
       startedAt: 1_000,
-      durationMs: 1_000,
+      durationMs: 5_000,
       stageXPercent: 20,
       stageYPercent: 20,
     };
@@ -201,8 +374,119 @@ describe("FretboardDropGame", () => {
     );
 
     const pick = getHorizontalDeadlinePick();
+    const travel = getHorizontalDeadlinePickTravel();
     expect(pick).toHaveAttribute("data-progress", progress.toFixed(3));
-    expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickRightPercent(progress).toFixed(2));
+    expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickContactPercent(progress).toFixed(2));
+    expect(travel).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(travel.style.getPropertyValue("--pick-contact-percent")).toBe(`${getHorizontalDeadlinePickContactPercent(progress)}%`);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveStyle({ left: `${DEADLINE_CONTACT_PERCENT}%` });
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "idle");
+    expect(getHorizontalDeadlinePickContactPercent(0)).toBe(PICK_START_CONTACT_PERCENT);
+    expect(getHorizontalDeadlinePickContactPercent(1)).toBe(DEADLINE_CONTACT_PERCENT);
+  });
+
+  it("derives Play Gate approach, urgent, success, and miss states from existing progress and cues", () => {
+    const target = {
+      id: 17,
+      targetKey: "standard:0:5" as const,
+      stringId: "standard:0" as const,
+      note: "A" as const,
+      stringIndex: 0 as const,
+      fret: 5,
+      startedAt: 1_000,
+      durationMs: 5_000,
+      stageXPercent: 20,
+      stageYPercent: 20,
+    };
+    const stageProps = {
+      fallingTargets: [target],
+      activeTargetId: target.id,
+      combo: 0,
+      stringSelection: [0] as const,
+      practiceContext: { practiceType: "string-focus" as const, selectedNotes: null },
+      targetSizePx: 88,
+    };
+    const { rerender } = render(<HorizontalDeadlineStage {...stageProps} cue={null} animationTime={4_500} />);
+
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "approach");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={null} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "urgent");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={{ id: 1, kind: "correct", note: "A", message: "Correct" }} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "correct");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={{ id: 2, kind: "tier-up", note: "A", message: "Tier up" }} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "correct");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={{ id: 3, kind: "miss", note: "A", message: "Miss" }} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "miss");
+  });
+
+  it("moves the normal-run horizontal pick from the reducer game clock through the deadline", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    const startPick = getHorizontalDeadlinePick();
+    expect(getHorizontalDeadlinePickTravel()).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(startPick).toHaveAttribute("data-progress", "0.000");
+    expect(startPick).toHaveAttribute("data-position-percent", "12.00");
+
+    now.mockReturnValue(4_000);
+    act(() => {
+      nextAnimationFrame?.(4_000);
+    });
+    const middlePick = getHorizontalDeadlinePick();
+    const middleProgress = Number(middlePick.dataset.progress);
+    expect(middleProgress).toBeGreaterThan(0);
+    expect(Number(middlePick.dataset.positionPercent)).toBeGreaterThan(12);
+
+    now.mockReturnValue(7_900);
+    act(() => {
+      nextAnimationFrame?.(7_900);
+    });
+    const deadlinePick = getHorizontalDeadlinePick();
+    expect(Number(deadlinePick.dataset.progress)).toBeGreaterThan(middleProgress);
+    expect(Number(deadlinePick.dataset.positionPercent)).toBeGreaterThan(80);
+  });
+
+  it("moves the Focus Practice pick from the reducer game clock while retaining the selected pool target", async () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    await seedWeakFocusCell();
+    render(<FretboardDropGame />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stats" }));
+    expect(await screen.findByText("1 eligible cell found. Using all of them.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Practice weakest" }));
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
+
+    const startPick = getHorizontalDeadlinePick();
+    const startProgress = Number(startPick.dataset.progress);
+    const startPosition = Number(startPick.dataset.positionPercent);
+    now.mockReturnValue(4_000);
+    act(() => {
+      nextAnimationFrame?.(4_000);
+    });
+
+    const movingPick = getHorizontalDeadlinePick();
+    expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
+    expect(getHorizontalDeadlinePickTravel()).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(Number(movingPick.dataset.progress)).toBeGreaterThan(startProgress);
+    expect(Number(movingPick.dataset.positionPercent)).toBeGreaterThan(startPosition);
   });
 
   it("spawns the next horizontal pick from the left after the active pick is resolved", () => {
@@ -246,8 +530,8 @@ describe("FretboardDropGame", () => {
     render(<FretboardDropGame />);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
-    expect(screen.getByTestId("horizontal-deadline-line")).toBeInTheDocument();
-    expect(getHorizontalDeadlinePick()).toHaveStyle({ width: "65px", height: "65px" });
+    expect(screen.getByTestId("horizontal-play-gate")).toBeInTheDocument();
+    expect(getHorizontalDeadlinePickTravel()).toHaveStyle({ width: "65px", height: "65px" });
   });
 
   it("keeps setup and run details available behind a toggle in phone landscape", () => {
@@ -289,6 +573,37 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     expect(screen.getByTestId("horizontal-deadline-stage")).toHaveAttribute("data-motion", "reduced");
+  });
+
+  it("keeps horizontal pick travel active when reduced motion is requested", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    const startPick = getHorizontalDeadlinePick();
+    const startPosition = Number(startPick.dataset.positionPercent);
+
+    now.mockReturnValue(4_000);
+    act(() => {
+      nextAnimationFrame?.(4_000);
+    });
+
+    const movingPick = getHorizontalDeadlinePick();
+    expect(screen.getByTestId("horizontal-deadline-stage")).toHaveAttribute("data-motion", "reduced");
+    expect(getHorizontalDeadlinePickTravel()).toHaveClass("horizontal-deadline-pick-travel--active");
+    expect(Number(movingPick.dataset.positionPercent)).toBeGreaterThan(startPosition);
   });
 
   it("switches Stats metrics and keeps no-data cells neutral", async () => {
@@ -733,6 +1048,7 @@ describe("FretboardDropGame", () => {
   it("keeps wrong clicks from costing a life", () => {
     render(<FretboardDropGame />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
 
@@ -742,9 +1058,10 @@ describe("FretboardDropGame", () => {
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
-  it("ignores non-target string clicks without resetting the active run", () => {
+  it("counts wrong-string clicks without resetting the active run", () => {
     render(<FretboardDropGame />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     for (const note of ["C", "D", "E", "F", "G", "B"]) togglePracticeNote(note);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
@@ -758,13 +1075,14 @@ describe("FretboardDropGame", () => {
     expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     expect(getActiveNotePromptLabel("A")).toBeInTheDocument();
-    expect(screen.queryByText("Almost")).not.toBeInTheDocument();
+    expect(screen.getByText("Almost")).toBeInTheDocument();
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
   it("counts a wrong fret on the active string without costing a life", () => {
     render(<FretboardDropGame />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     for (const note of ["C", "D", "E", "F", "G", "B"]) togglePracticeNote(note);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
@@ -776,15 +1094,30 @@ describe("FretboardDropGame", () => {
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
   });
 
-  it("keeps scoring on correct fret clicks and fades the resolved pick", () => {
+  it("keeps scoring on correct fret clicks after the pick advances and fades the resolved pick", () => {
+    let nextAnimationFrame: FrameRequestCallback | null = null;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextAnimationFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     render(<FretboardDropGame />);
 
     selectAOnly();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    const firstTargetId = getHorizontalDeadlinePickTravel().dataset.targetId;
+    now.mockReturnValue(3_000);
+    act(() => {
+      nextAnimationFrame?.(3_000);
+    });
+    expect(Number(getHorizontalDeadlinePick().dataset.progress)).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 5" }));
 
     expect(screen.getAllByText("1").length).toBeGreaterThan(0);
     expect(getHorizontalDeadlinePick("resolved-correct")).toBeInTheDocument();
+    expect(getHorizontalDeadlinePickTravel().dataset.targetId).not.toBe(firstTargetId);
+    expect(getHorizontalDeadlinePickTravel().style.getPropertyValue("--pick-contact-percent")).toBe("12%");
   });
 
   it("persists correct target-cell evidence on target resolution", async () => {
@@ -830,26 +1163,29 @@ describe("FretboardDropGame", () => {
     });
   });
 
-  it("persists active-string wrong frets on the target cell and ignores non-target strings", async () => {
+  it("persists wrong frets on the actual clicked cell", async () => {
     render(<FretboardDropGame />);
 
     selectAOnly();
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
-    fireEvent.click(screen.getByRole("button", { name: "String 2, open string" }));
 
     expect(window.localStorage.getItem(DROP_CELL_PROGRESS_STORAGE_KEY)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "String 2, open string" }));
+    await waitFor(() => {
+      expect(readCellProgressRecord(createFretboardCellId(1, 0))).toMatchObject({
+        resolvedTargets: 0,
+        otherWrongTaps: 1,
+      });
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 4" }));
     fireEvent.click(screen.getByRole("button", { name: "String 1, fret 2" }));
     await waitFor(() => {
-      expect(readCellProgressRecord(createFretboardCellId(0, 5))).toMatchObject({
-        resolvedTargets: 0,
-        adjacentWrongTaps: 1,
-        otherWrongTaps: 1,
-      });
+      expect(readCellProgressRecord(createFretboardCellId(0, 5))).toBeUndefined();
     });
-    expect(readCellProgressRecord(createFretboardCellId(0, 4))).toBeUndefined();
-    expect(readCellProgressRecord(createFretboardCellId(0, 2))).toBeUndefined();
+    expect(readCellProgressRecord(createFretboardCellId(0, 4))).toMatchObject({ adjacentWrongTaps: 1 });
+    expect(readCellProgressRecord(createFretboardCellId(0, 2))).toMatchObject({ otherWrongTaps: 1 });
   });
 
   it("shows tier-up feedback once when a streak reaches the first pacing tier", () => {
@@ -882,6 +1218,7 @@ describe("FretboardDropGame", () => {
 
     render(<FretboardDropGame />);
     selectPracticeTempo();
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     act(() => {
@@ -893,7 +1230,7 @@ describe("FretboardDropGame", () => {
     expect(reveal).toBeInTheDocument();
     expect(reveal.textContent).toMatch(/^[A-G]$/);
     expect(screen.getByTestId("horizontal-deadline-impact")).toBeInTheDocument();
-    expect(screen.getByTestId("horizontal-deadline-line")).toHaveAttribute("data-state", "miss");
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "miss");
     expect(screen.queryByLabelText(/Note prompt .+ \(active\)/)).not.toBeInTheDocument();
 
     act(() => {
@@ -906,20 +1243,23 @@ describe("FretboardDropGame", () => {
 
   it("shows the final miss reveal before completing the run", () => {
     vi.useFakeTimers();
-    let nextAnimationFrame: FrameRequestCallback | null = null;
+    let nextAnimationFrames: FrameRequestCallback[] = [];
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      nextAnimationFrame = callback;
+      nextAnimationFrames.push(callback);
       return 1;
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
 
     render(<FretboardDropGame />);
     selectPracticeTempo();
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     for (const expectedLives of ["2 lives", "1 lives"]) {
       act(() => {
-        nextAnimationFrame?.(performance.now() + 7_000);
+        const frames = nextAnimationFrames;
+        nextAnimationFrames = [];
+        frames.forEach((frame) => frame(performance.now() + 7_000));
       });
 
       expect(screen.getByLabelText(expectedLives)).toBeInTheDocument();
@@ -934,7 +1274,9 @@ describe("FretboardDropGame", () => {
     }
 
     act(() => {
-      nextAnimationFrame?.(performance.now() + 7_000);
+      const frames = nextAnimationFrames;
+      nextAnimationFrames = [];
+      frames.forEach((frame) => frame(performance.now() + 7_000));
     });
 
     expect(screen.getByLabelText("0 lives")).toBeInTheDocument();
@@ -946,8 +1288,10 @@ describe("FretboardDropGame", () => {
     });
 
     expect(screen.queryByTestId("miss-reveal")).not.toBeInTheDocument();
-    expect(screen.getByText("run complete")).toBeInTheDocument();
+    expect(screen.getByText("survival complete")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Play Again" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Play Again" }));
+    expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
   });
 
   it("shows clearer results labels and keeps Play Again available", () => {
@@ -982,7 +1326,7 @@ describe("FretboardDropGame", () => {
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     appendCompletedRunToHistory(
-      "mode:standard-60s|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
+      "mode:standard-60s|format:timed-trial|speed:practice-tempo|strings:0|notes:all|pool:naturals|frets:0-11|tuning:standard-e-b-g-d-a-e|fluency:v1|targets:v1",
       {
         completedAt: 1,
         fluencyScore: 640,
@@ -1004,5 +1348,99 @@ describe("FretboardDropGame", () => {
     expect(screen.getByRole("img", {
       name: "Last 2 Fluency Scores in this practice context: 640, 0. Change minus 640.",
     })).toBeInTheDocument();
+  });
+
+  it("defaults to Timed Trial and restores a persisted Survival choice", () => {
+    const firstRender = render(<FretboardDropGame />);
+    expect(screen.getByRole("button", { name: /Timed Trial/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
+    expect(window.localStorage.getItem(DROP_RUN_FORMAT_STORAGE_KEY)).toBe("survival");
+    firstRender.unmount();
+
+    render(<FretboardDropGame />);
+    expect(screen.getByRole("button", { name: /Survival/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("3 misses")).toBeInTheDocument();
+  });
+
+  it("shows only the governing HUD metric for each run format", () => {
+    const timed = render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    expect(screen.getByLabelText(/seconds remaining/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("3 lives")).not.toBeInTheDocument();
+    timed.unmount();
+
+    render(<FretboardDropGame />);
+    fireEvent.click(screen.getByRole("button", { name: /Survival/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+    expect(screen.getByLabelText("3 lives")).toBeInTheDocument();
+    expect(screen.getByLabelText("Survival time 0:00")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/seconds remaining/)).not.toBeInTheDocument();
+  });
+
+  it("keeps Timed Trial running after three misses but ends it at sixty seconds", () => {
+    let state = startHorizontalReducerGame({ runFormat: "timed-trial" });
+    for (let index = 0; index < 3; index += 1) {
+      const target = state.fallingTargets[0]!;
+      const expiredAt = target.startedAt + target.durationMs;
+      state = dropGameReducer(state, { type: "tick", now: expiredAt });
+      const reveal = state.missReveal!;
+      state = dropGameReducer(state, { type: "finish-miss-reveal", id: reveal.id, now: expiredAt + 520 });
+    }
+    expect(state.status).toBe("playing");
+    expect(state.lives).toBe(3);
+    state = dropGameReducer(state, { type: "tick", now: state.runStartedAt + 60_000 });
+    expect(state.status).toBe("complete");
+  });
+
+  it("lets Survival continue past sixty seconds and ends after its third missed reveal", () => {
+    let state = startHorizontalReducerGame({ runFormat: "survival" });
+    state = dropGameReducer(state, { type: "tick", now: state.runStartedAt + 61_000 });
+    expect(state.status).toBe("playing");
+    const firstReveal = state.missReveal!;
+    state = dropGameReducer(state, { type: "finish-miss-reveal", id: firstReveal.id, now: state.now + 520 });
+
+    for (let index = 0; index < 2; index += 1) {
+      const target = state.fallingTargets[0]!;
+      const expiredAt = Math.max(state.now, target.startedAt + target.durationMs);
+      state = dropGameReducer(state, { type: "tick", now: expiredAt });
+      const reveal = state.missReveal!;
+      state = dropGameReducer(state, { type: "finish-miss-reveal", id: reveal.id, now: expiredAt + 520 });
+    }
+    expect(state.status).toBe("complete");
+    expect(state.lives).toBe(0);
+  });
+
+  it("does not remove a Survival life for a wrong fret tap", () => {
+    let state = startHorizontalReducerGame({ runFormat: "survival" });
+    const target = state.fallingTargets[0]!;
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: target.startedAt + 200,
+      stringIndex: target.stringIndex,
+      fret: target.fret === 0 ? 1 : 0,
+      note: target.note,
+    });
+    expect(state.lives).toBe(3);
+  });
+
+  it("records a wrong-string tap without removing a Survival life or moving the active target", () => {
+    let state = startHorizontalReducerGame({ runFormat: "survival" });
+    const target = state.fallingTargets[0]!;
+    const wrongString = target.stringIndex === 0 ? 1 : 0;
+    const tapAt = target.startedAt + 200;
+
+    state = dropGameReducer(state, {
+      type: "fret-click",
+      now: tapAt,
+      stringIndex: wrongString,
+      fret: target.fret,
+      note: target.note,
+    });
+
+    expect(state.lives).toBe(3);
+    expect(state.wrong).toBe(1);
+    expect(state.combo).toBe(0);
+    expect(state.fallingTargets).toEqual([target]);
+    expect(getTargetProgress(state.fallingTargets[0]!, tapAt)).toBeCloseTo(200 / target.durationMs);
   });
 });

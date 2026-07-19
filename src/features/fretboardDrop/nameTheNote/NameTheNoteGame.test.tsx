@@ -7,6 +7,7 @@ import {
   NameTheNoteGame,
   buildNameTheNoteTargetPool,
   drawNameTheNoteTarget,
+  getNameTheNoteRunGrade,
   getNameTheNoteFretSpaceFractions,
   shuffleNameTheNoteTargets,
 } from "./NameTheNoteGame";
@@ -16,6 +17,13 @@ describe("NameTheNoteGame", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("maps Fluency to an exciting S through C run grade", () => {
+    expect(getNameTheNoteRunGrade(940)).toBe("S");
+    expect(getNameTheNoteRunGrade(800)).toBe("A");
+    expect(getNameTheNoteRunGrade(600)).toBe("B");
+    expect(getNameTheNoteRunGrade(400)).toBe("C");
   });
 
   it("builds eligible targets from selected settings", () => {
@@ -131,7 +139,7 @@ describe("NameTheNoteGame", () => {
     ]);
   });
 
-  it("uses progressive fret spacing, neck taper styling, and increasing string gauges", () => {
+  it("uses progressive fret spacing, an unclipped six-row neck, and increasing string gauges", () => {
     render(<NameTheNoteGame />);
     selectOnlyNote("A");
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
@@ -142,10 +150,22 @@ describe("NameTheNoteGame", () => {
     expect(Number(screen.getByTestId("name-note-fret-header-1").getAttribute("data-fret-width"))).toBeGreaterThan(
       Number(screen.getByTestId("name-note-fret-header-11").getAttribute("data-fret-width")),
     );
-    expect(screen.getByTestId("name-note-neck")).toHaveAttribute("data-neck-taper", "nut-90-to-100");
+    expect(screen.getByTestId("name-note-fretboard")).toHaveAttribute("data-layout", "responsive-six-row-grid");
+    expect(screen.getByTestId("name-note-neck")).toHaveAttribute("data-neck-taper", "none");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-shape", "pick-gem");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-position-lock", "centered");
+    expect(screen.getAllByTestId(/name-note-string-row-/)).toHaveLength(6);
     expect(Number(screen.getByTestId("name-note-string-row-0").getAttribute("data-string-gauge"))).toBeLessThan(
       Number(screen.getByTestId("name-note-string-row-5").getAttribute("data-string-gauge")),
     );
+  });
+
+  it("uses a top-aligned responsive gameplay stack", () => {
+    render(<NameTheNoteGame />);
+    selectOnlyNote("A");
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    expect(screen.getByTestId("name-note-run-screen")).toHaveAttribute("data-layout", "top-aligned-responsive-stack");
   });
 
   it("does not render a conventional per-question progress bar", () => {
@@ -157,30 +177,31 @@ describe("NameTheNoteGame", () => {
     expect(screen.queryByTestId("name-note-question-progress")).not.toBeInTheDocument();
   });
 
-  it("keeps the fretboard stable while answer button fills drain with countdownFraction", () => {
+  it("moves the countdown from answer fills to the target ring", () => {
     vi.useFakeTimers();
     const advanceClock = mockPerformanceClock();
     render(<NameTheNoteGame />);
     selectOnlyNote("A");
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
-    const fretboard = screen.getByTestId("name-note-fretboard");
-    expect(fretboard).not.toHaveAttribute("data-countdown-band");
-    expect(fretboard).not.toHaveAttribute("data-countdown-fraction");
-    const initialStyle = fretboard.getAttribute("style");
-    const answerFill = screen.getByTestId("answer-fill-A");
-    expect(answerFill).toHaveAttribute("data-countdown-fraction", "1.00");
-    expect(answerFill).toHaveStyle({ height: "100%" });
+    const targetRing = screen.getByTestId("name-note-target-ring");
+    expect(screen.queryByTestId("answer-fill-A")).not.toBeInTheDocument();
+    expect(targetRing).toHaveAttribute("data-countdown-fraction", "1.00");
     expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("4s");
 
     act(() => {
       advanceClock(2_200);
     });
 
-    expect(fretboard.getAttribute("style")).toBe(initialStyle);
-    expect(answerFill).toHaveAttribute("data-countdown-fraction", "0.45");
-    expect(answerFill).toHaveStyle({ height: "45%" });
+    expect(targetRing).toHaveAttribute("data-countdown-fraction", "0.45");
     expect(screen.getByTestId("name-note-question-countdown")).toHaveTextContent("2s");
+
+    act(() => {
+      advanceClock(1_000);
+    });
+
+    expect(targetRing).toHaveAttribute("data-urgency", "halo-pulse");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-position-lock", "centered");
   });
 
   it("renders an open-string target outside the numbered fretted area", () => {
@@ -200,8 +221,22 @@ describe("NameTheNoteGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Answer A" }));
 
     expect(screen.getAllByText("Correct").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "correct");
+    expect(screen.getByTestId("name-note-earned-points")).toHaveTextContent("+20");
+    expect(screen.getByRole("button", { name: "Answer A" })).toHaveAttribute("data-feedback", "correct");
     expect(getRunStat("Run Points")).toHaveTextContent("20");
     expect(getRunStat("Streak")).toHaveTextContent("1");
+  });
+
+  it("keeps keyboard answer controls active", () => {
+    render(<NameTheNoteGame />);
+    selectOnlyNote("A");
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    fireEvent.keyDown(window, { key: "a" });
+
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "correct");
+    expect(screen.getByTestId("name-note-earned-points")).toHaveTextContent("+20");
   });
 
   it("lets the player retry after wrong answers without revealing or resetting the question timer", () => {
@@ -260,9 +295,48 @@ describe("NameTheNoteGame", () => {
       advanceClock(4_050);
     });
 
-    expect(screen.getByText("Time - it was A")).toBeInTheDocument();
+    const targetKey = screen.getByTestId("name-note-target-cell").getAttribute("data-target-key");
+    expect(screen.getByText("Time's up · A")).toBeInTheDocument();
+    expect(screen.queryByTestId("name-note-question-countdown")).not.toBeInTheDocument();
+    expect(screen.getByTestId("name-note-target-marker")).toHaveAttribute("data-outcome", "timeout");
+    expect(screen.getByTestId("name-note-target-marker")).toHaveTextContent("A");
     expect(screen.getByRole("button", { name: "Answer A" })).toHaveClass("border-emerald-100");
     expect(screen.getByRole("button", { name: "Answer B" })).toBeDisabled();
+
+    act(() => {
+      advanceClock(1_500);
+    });
+
+    expect(screen.getByText("Time's up · A")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-target-cell")).toHaveAttribute("data-target-key", targetKey);
+
+    act(() => {
+      advanceClock(150);
+    });
+
+    expect(screen.queryByText("Time's up · A")).not.toBeInTheDocument();
+  });
+
+  it("signals the final push and celebrates streak milestones", () => {
+    vi.useFakeTimers();
+    const advanceClock = mockPerformanceClock();
+    render(<NameTheNoteGame />);
+    selectOnlyNote("A");
+    fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
+
+    for (let index = 0; index < 3; index += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Answer A" }));
+      act(() => {
+        advanceClock(500);
+      });
+    }
+    expect(screen.getByTestId("name-note-streak-milestone")).toHaveTextContent("Heating up");
+
+    act(() => {
+      advanceClock(NAME_THE_NOTE_RUN_DURATION_MS - 9_000 - 1_500);
+    });
+    expect(screen.getByTestId("name-note-final-push")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-run-screen")).toHaveAttribute("data-final-push", "true");
   });
 
   it("ends at session expiration and shows the results summary", () => {
@@ -285,6 +359,9 @@ describe("NameTheNoteGame", () => {
     expect(screen.getByText("Accuracy")).toBeInTheDocument();
     expect(screen.getByText("Avg Correct")).toBeInTheDocument();
     expect(screen.getByText("Best Streak")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-results-grade")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-best-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("name-note-next-challenge")).toBeInTheDocument();
   });
 
   it("Play Again restarts with the same settings", () => {

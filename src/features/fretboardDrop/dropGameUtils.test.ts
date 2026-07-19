@@ -12,6 +12,7 @@ import {
   DROP_TARGET_MIN_DURATION_MS,
   DROP_SPEED_MODE_CONFIGS,
   DROP_SPEED_MODE_STORAGE_KEY,
+  DROP_RUN_FORMAT_STORAGE_KEY,
   NATURAL_DROP_NOTES,
   calculateAccuracy,
   createPracticeNoteKey,
@@ -34,6 +35,7 @@ import {
   getPromptTimeRemaining,
   getTargetTopStyle,
   getWrongFeedback,
+  isNewDropPersonalBest,
   pickPromptStagePosition,
   sortFallingTargetsByProgress,
   spawnStreamTarget,
@@ -46,12 +48,50 @@ import {
   makeFocusDropTarget,
   normalizePracticeContext,
   readBestDropScore,
+  readBestSurvivalDuration,
   readDropSpeedMode,
+  readDropRunFormat,
+  writeDropRunFormat,
   writeBestDropScore,
+  writeBestSurvivalDuration,
   writeDropSpeedMode,
 } from "./dropGameUtils";
 
 describe("Fretboard Drop utilities", () => {
+  it("defaults run format safely and persists a valid selection", () => {
+    expect(readDropRunFormat()).toBe("timed-trial");
+    window.localStorage.setItem(DROP_RUN_FORMAT_STORAGE_KEY, "invalid");
+    expect(readDropRunFormat()).toBe("timed-trial");
+    writeDropRunFormat("survival");
+    expect(readDropRunFormat()).toBe("survival");
+    window.localStorage.clear();
+  });
+
+  it("keeps Survival best scores separate and treats legacy values as Timed Trial", () => {
+    window.localStorage.setItem("guitarrise:fretboard-drop:best-score:v1", "11");
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, undefined, "timed-trial")).toBe(11);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, undefined, "survival")).toBe(0);
+    writeBestDropScore(7, [0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "survival");
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "survival")).toBe(7);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "timed-trial")).toBe(11);
+    window.localStorage.clear();
+  });
+
+  it("stores Survival duration separately from Timed Trial scores", () => {
+    writeBestSurvivalDuration(74_200, [0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo");
+    expect(readBestSurvivalDuration([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo")).toBe(74_200);
+    expect(readBestDropScore([0], DEFAULT_DROP_PRACTICE_CONTEXT, "practice-tempo", "timed-trial")).toBe(0);
+    window.localStorage.clear();
+  });
+
+  it("uses one mode-aware personal-best rule", () => {
+    expect(isNewDropPersonalBest({ runFormat: "timed-trial", score: 12, bestScore: 11, survivalDurationMs: 0, bestSurvivalDurationMs: 0 })).toBe(true);
+    expect(isNewDropPersonalBest({ runFormat: "timed-trial", score: 11, bestScore: 11, survivalDurationMs: 0, bestSurvivalDurationMs: 0 })).toBe(false);
+    expect(isNewDropPersonalBest({ runFormat: "survival", score: 1, bestScore: 99, survivalDurationMs: 61_000, bestSurvivalDurationMs: 60_000 })).toBe(true);
+    expect(isNewDropPersonalBest({ runFormat: "survival", score: 999, bestScore: 1, survivalDurationMs: 59_000, bestSurvivalDurationMs: 60_000 })).toBe(false);
+    expect(isNewDropPersonalBest({ runFormat: "survival", score: 2, bestScore: 1, survivalDurationMs: 60_000, bestSurvivalDurationMs: 60_000 })).toBe(true);
+  });
+
   it("uses the current note pool for generated targets", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     const target = makeDropTarget(1, 0, 0);

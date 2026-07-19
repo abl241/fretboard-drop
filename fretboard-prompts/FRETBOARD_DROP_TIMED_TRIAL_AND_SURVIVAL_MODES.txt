@@ -1,0 +1,297 @@
+FRETBOARD DROP PROMPT: SEPARATE TIMED TRIAL AND SURVIVAL MODES
+
+Model: Terra
+Effort: Medium
+Speed: Normal
+
+Read and execute this prompt from the repository prompts folder.
+
+Project: Fretboard Drop
+Scope: Fretboard Drop only
+
+Important testing instruction:
+Do not run browser automation, Playwright, live preview testing, or screenshot testing. I will manually test in the browser. Run only focused tests, typecheck, build, and git diff --check.
+
+Before implementation, explicitly answer:
+“Are we solving the root problem, or just patching the current architecture?”
+
+Root problem:
+The current standard game combines a 60-second timer with three lives. This creates an unclear hybrid rule set. A player should immediately understand whether the goal is to score as many notes as possible before time expires or survive until three missed picks end the run.
+
+This is also a marketing problem. Two simple, clearly named modes are easier to explain, demonstrate, and promote:
+- Timed Trial: beat the clock and set a high score.
+- Survival: protect three picks and last as long as possible.
+
+Engineering review:
+Compare these options before changing code:
+
+1. Small patch to current setup
+Keep the hybrid mode and only add explanatory copy.
+- Lowest complexity
+- Does not solve the confusing rule structure
+- Poor long-term product clarity
+
+2. Recommended focused refactor
+Add an explicit run-mode selection and derive timer/lives/end conditions from that mode while reusing the current reducer, target timing, renderers, scoring, persistence patterns, and results screen.
+- Moderate, contained change
+- Low maintenance burden
+- Solves the gameplay and marketing problem
+- No new packages, backend, database, or effects system
+
+3. Larger game-mode architecture
+Create a generalized plugin or strategy framework for future modes.
+- More abstraction and testing
+- Higher maintenance burden
+- Overkill for the current stage
+
+Choose Option 2 unless repository inspection reveals a smaller equally clear implementation.
+
+GOAL
+
+Offer two distinct normal-play modes:
+
+TIMED TRIAL
+- Fixed 60-second run.
+- The run ends only when the timer reaches zero.
+- Do not display or use lives.
+- A missed target records a miss, resets combo, shows the existing miss reveal/cue, then continues with a new target.
+- Wrong fret or wrong string does not remove time or end the run.
+- Primary goal is highest score within 60 seconds.
+- Results should emphasize score, accuracy, wrong taps, misses, and best streak.
+
+SURVIVAL
+- Start with three lives represented by the existing life-pick icons.
+- No fixed 60-second countdown.
+- The run ends when the third unanswered target reaches the Play Gate.
+- Wrong fret or wrong string does not remove a life.
+- Correct notes increase score and combo.
+- The current pacing progression may remain unchanged in this prompt.
+- Results should emphasize notes found, survival time, accuracy, wrong taps, misses, and best streak.
+
+MARKETABLE START-SCREEN UX
+
+Add a clear run-mode selector before starting normal play.
+
+Use concise user-facing language:
+
+Timed Trial
+“Find as many notes as you can in 60 seconds.”
+
+Survival
+“Protect three picks and keep the run alive.”
+
+Requirements:
+- Make the two choices visually distinct and immediately understandable.
+- Preserve the existing string, note-focus, and speed selectors.
+- Do not overload the start screen with long explanations.
+- Persist the selected run mode locally so returning players keep their last choice.
+- Choose Timed Trial as the default for first-time users unless existing product logic strongly indicates otherwise.
+- Focus Practice should continue to work. Do not force the new selector into a focus-practice flow if that would create confusing or unnecessary behavior.
+- Do not introduce additional game modes in this prompt.
+
+DATA AND TYPES
+
+Use a simple explicit type, such as:
+- "timed-trial"
+- "survival"
+
+Do not reuse ambiguous values such as "standard" if that hides the gameplay rule.
+
+Keep run mode separate from:
+- normal versus focus practice
+- speed mode
+- practice context
+- string selection
+
+Avoid a generalized mode registry, class hierarchy, dependency-injection system, or plugin architecture.
+
+GAMEPLAY RULES
+
+Timed Trial:
+- Keep DROP_RUN_DURATION_MS at 60 seconds.
+- Ignore lives as a completion condition.
+- On target timeout, record the miss and show existing feedback.
+- After the miss reveal/recovery completes, spawn the next target.
+- Continue until the timer reaches zero.
+
+Survival:
+- Do not decrement a hidden timer.
+- Track elapsed run time from the existing performance.now-based runStartedAt clock.
+- On target timeout, decrement lives.
+- Complete the run only when lives reach zero.
+- Continue spawning targets indefinitely until the third miss.
+- Ensure there is no artificial 60-second cutoff.
+
+For both modes:
+- Keep target-specific startedAt and durationMs timing intact.
+- Keep the current performance.now clock domain.
+- Do not add another animation or gameplay clock.
+- Wrong answers must not restart, shorten, or reposition the active target.
+- Preserve the current HorizontalPlayGate and its idle, approach, urgent, correct, tier-up, and miss states.
+- Preserve reduced-motion behavior.
+- Preserve audio behavior.
+- Preserve note, string, fret, score, combo, accuracy, fluency, analytics, run history, cell progress, and best-score behavior where applicable.
+
+WRONG-STRING CONSISTENCY
+
+While making this change, repair the current silent wrong-string behavior if it can be done safely within the same reducer path:
+- Clicking any incorrect fretboard cell, including the wrong string, should register as a wrong answer.
+- Show the existing wrong visual/audio feedback.
+- Increment wrong count.
+- Reset combo.
+- Do not remove a life.
+- Do not alter the active target timing.
+
+Do not add a new feedback system.
+
+HUD
+
+Timed Trial HUD:
+- Show Score, Combo, Best, speed/practice context, and countdown timer.
+- Do not show lives.
+
+Survival HUD:
+- Show Score, Combo, Best, speed/practice context, and three life-pick icons.
+- Show elapsed survival time in a compact timer field rather than a countdown.
+- Make the mode recognizable without adding clutter.
+
+RESULTS
+
+Timed Trial results:
+- Clearly label the mode.
+- Show Fluency Score if currently applicable.
+- Show Notes Found.
+- Show Accuracy.
+- Show Wrong Taps.
+- Show Misses.
+- Show Best Streak.
+- Keep Play Again as the obvious primary action.
+
+Survival results:
+- Clearly label the mode.
+- Show survival duration prominently enough to matter.
+- Show Notes Found.
+- Show Accuracy.
+- Show Wrong Taps.
+- Show Misses.
+- Show Best Streak.
+- Keep Play Again as the obvious primary action.
+
+Keep the results screen compact. Do not redesign unrelated visual styling.
+
+PERSISTENCE
+
+Store the selected normal-play run mode in localStorage with a versioned Fretboard Drop key.
+
+Keep best scores and run history separated by run mode so:
+- A Timed Trial score is not compared with a Survival score.
+- Survival personal best should use a meaningful comparison, preferably longest survival time first, with score as a secondary statistic if needed.
+- Existing Timed Trial-like historical data should remain available and should not disappear.
+
+Use the smallest safe migration/fallback:
+- Treat existing standard 60-second records as Timed Trial records.
+- Do not build a broad migration framework.
+
+ANALYTICS
+
+Include the explicit run mode in existing analytics payloads and completed-run counters.
+
+Do not add an analytics vendor or backend.
+
+TESTS
+
+Add or update focused tests covering at minimum:
+
+Mode selection and persistence:
+- First-time default.
+- Returning selected mode.
+- Mode selector copy and selected state.
+
+Timed Trial:
+- Starts with 60 seconds.
+- Does not end after three misses.
+- Does not display lives.
+- Ends when time reaches zero.
+- Miss reveal and next-target recovery continue correctly.
+- Wrong fret and wrong string do not remove time or end the run.
+
+Survival:
+- Starts with three lives.
+- Does not display a countdown.
+- Tracks elapsed time.
+- Loses one life only when a target reaches the Play Gate unanswered.
+- Wrong fret and wrong string do not remove a life.
+- Ends on the third miss.
+- Continues beyond 60 seconds if lives remain.
+
+Shared behavior:
+- Correct hits still remove the current target and spawn a fresh target.
+- Fresh targets start at zero progress.
+- Wrong answers leave current target timing unchanged.
+- Play Gate location and state behavior remain unchanged.
+- Reduced-motion behavior remains unchanged.
+- Focus Practice remains functional.
+- Existing speed modes remain functional.
+- Results and Play Again work for both modes.
+- Persistence and analytics include run mode.
+
+FILES AND SCOPE
+
+Inspect the repository before deciding exact files.
+
+Likely files include:
+- FretboardDropGame.tsx
+- dropGameTypes.ts
+- dropGameUtils.ts
+- dropRunHistory.ts
+- dropFluencyScore.ts if mode-specific comparison requires it
+- dropAnalytics.ts
+- FretboardDropGame.test.tsx
+- related focused tests
+- index.css only if minimal selector or HUD layout support is necessary
+
+Do not:
+- Change HorizontalPlayGate visuals.
+- Add more particles or animation effects.
+- Change target speed balancing in this prompt.
+- Add backend, authentication, database, cloud sync, leaderboard, microphone input, payments, achievements, power-ups, or multiplayer.
+- Rewrite the full reducer.
+- Build a generalized game engine.
+- Change unrelated GuitarRise or Transcribe features.
+- Add packages unless absolutely necessary.
+
+MANUAL CHECKLIST TO REPORT
+
+Report that I should manually verify:
+- Start screen makes the difference between Timed Trial and Survival obvious within a few seconds.
+- Timed Trial has a countdown and no lives.
+- Timed Trial continues after three misses and ends at zero.
+- Survival has three lives and elapsed time, with no 60-second cutoff.
+- Survival ends exactly on the third unanswered pick.
+- Wrong fret and wrong string feedback feel responsive but do not cost lives.
+- Pick travel remains synchronized and never restarts after a wrong answer.
+- Play Gate feedback remains correct.
+- Phone landscape remains readable.
+- Play Again repeats the same selected mode.
+- Focus Practice still works.
+
+FINAL RESPONSE FORMAT
+
+End with:
+1. Root-problem answer.
+2. Chosen architecture and why.
+3. Files changed.
+4. Exact Timed Trial behavior.
+5. Exact Survival behavior.
+6. Persistence and compatibility behavior.
+7. Tests and checks run with results.
+8. Manual checks for me to perform.
+9. Any known limitation.
+
+End the final response with exactly:
+TASK COMPLETE
+
+Only use:
+TASK INCOMPLETE
+
+if requested work, tests, typecheck, build, or git diff --check did not complete successfully. Include the exact blocker or remaining work.

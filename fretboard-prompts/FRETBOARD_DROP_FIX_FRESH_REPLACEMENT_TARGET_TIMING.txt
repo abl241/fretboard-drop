@@ -1,0 +1,242 @@
+MODEL RECOMMENDATION
+Model: Terra
+Effort: High
+Speed: Deliberate
+
+CODEX RUN INSTRUCTIONS
+Read and execute this prompt from the repository's prompts folder.
+Do not use browser automation, Playwright, live preview, or screenshot testing.
+Run only targeted tests, typecheck, the full test suite, and production build.
+End with TASK COMPLETE only if all requested work and checks are finished.
+Otherwise end with TASK INCOMPLETE and list the exact blocker or remaining work.
+
+TASK
+Fix Fretboard Drop horizontal-mode replacement targets that sometimes appear already partway across the lane, especially after a wrong answer or delayed resolution.
+
+ROOT-PROBLEM REVIEW
+Before implementation, explicitly answer:
+
+“Are we solving the root problem, or just patching the current architecture?”
+
+The root product rule is simple:
+
+- Horizontal mode shows one active pick at a time.
+- Every newly created horizontal pick must begin its own lifetime at the moment it is actually created.
+- Its visible progress and gameplay expiration must both derive from the same fresh startedAt timestamp and the same durationMs.
+- A wrong answer must not replace the active target or silently change its startedAt.
+- A replacement target created after a correct answer or miss recovery must begin at progress 0, regardless of how long the previous target existed.
+
+CURRENT OBSERVED BEHAVIOR
+- The recent single-clock RAF repair correctly makes the visible pick position derive from performance.now() and getTargetProgress().
+- The current pick now reaches the deadline before disappearing.
+- However, after a wrong answer and then resolution, a new letter pick can appear much closer to the deadline, giving much less time to answer.
+- A similar early-pop symptom existed before the recent RAF repair, when CSS travel and reducer timing were separate.
+- Do not revert the single-clock RAF repair.
+- The current new-pick symptom strongly suggests that a replacement target is being created with a stale or scheduled startedAt rather than the actual creation time.
+
+IMPORTANT: VERIFY BEFORE EDITING
+Inspect the actual implementation of all relevant functions and paths before deciding the fix, especially:
+
+- applyStreamSpawn
+- spawnStreamTarget
+- makeDropTarget
+- makeFocusDropTarget
+- any helper that creates DropTarget.startedAt
+- nextStreamSpawnAt handling
+- correct-hit replacement path
+- miss-recovery replacement path
+- wrong-answer reducer path
+- active target selection and identity
+- HorizontalDeadlineStage rendering and keys
+
+Explicitly determine and report:
+
+1. What exact value becomes the new target’s startedAt.
+2. Whether spawnStreamTarget uses nextStreamSpawnAt, now, or another calculated timestamp.
+3. Whether overdue scheduled spawn times are preserved.
+4. Whether correct-hit and post-miss targets use the same spawning path.
+5. Whether a wrong answer changes target identity, target order, startedAt, durationMs, or render key.
+6. Why a new pick can appear partway across the horizontal lane.
+
+Do not assume the cause. Confirm it from the code.
+
+ARCHITECTURE COMPARISON
+Before changing code, briefly compare:
+
+1. Small patch to current stream scheduler
+2. Simpler dedicated horizontal one-target spawn path
+3. Broader separation of horizontal mode from the legacy stream architecture
+
+For each, consider:
+- complexity
+- maintenance burden
+- what could break
+- whether it is overkill
+
+Prefer the smallest clear solution that makes the horizontal rule explicit.
+
+RECOMMENDED DIRECTION
+If inspection confirms that horizontal mode inherits stale scheduled timestamps from the generic stream scheduler, implement a small dedicated horizontal spawn path or equivalent explicit branch.
+
+The rule should be obvious in code:
+
+- when a horizontal replacement target is created, target.startedAt must equal the current reducer action timestamp
+- any retained nextStreamSpawnAt value must be rebased from that same current timestamp
+- do not let an overdue stream schedule backdate a newly visible horizontal target
+
+A helper such as this is acceptable if it reduces ambiguity:
+
+spawnNextHorizontalTarget(state, now)
+
+It should reuse existing:
+- target generation
+- note selection
+- focus pool behavior
+- string selection
+- duration calculation
+- speed mode behavior
+- score/combo pacing logic
+- recent hit progress logic
+
+It should not duplicate unrelated generation rules.
+
+WRONG-ANSWER BEHAVIOR
+Preserve the intended current behavior unless the code proves otherwise:
+
+- A wrong fret click does not remove the active target.
+- A wrong fret click does not create a replacement target.
+- A wrong fret click does not reset or alter the active target’s startedAt.
+- A wrong fret click resets combo and records feedback as currently designed.
+- The same active target continues toward the deadline.
+
+Do not add grace time, pause time, timer resets, or new gameplay rules in this task.
+
+CORRECT-HIT BEHAVIOR
+After a correct answer:
+
+- remove the resolved target
+- create the next horizontal target
+- assign the replacement target a fresh startedAt equal to the click action’s now timestamp
+- the replacement pick must begin at progress 0
+- preserve score, combo, pacing, sound, feedback, analytics, and progress recording
+
+MISS-RECOVERY BEHAVIOR
+After a miss and the existing reveal delay:
+
+- create the next horizontal target using the finish-miss-reveal action’s now timestamp
+- the replacement pick must begin at progress 0
+- preserve lives, miss reveal, stage cue, recovery delay, score, analytics, and progress recording
+
+NORMAL AND FOCUS MODES
+The fix must work in:
+
+- normal runs
+- focus-practice runs
+- Warm-Up
+- Practice Tempo
+- Performance Tempo
+
+Do not change target duration values or speed-mode configuration.
+
+SCOPE GUARDRAILS
+Do not:
+
+- revert the target-scoped RAF renderer
+- restore CSS duration-based travel
+- add a second visual clock
+- change scoring
+- change wrong-answer penalties
+- change lives
+- change run duration
+- change audio behavior
+- change localStorage schemas
+- change analytics event names or payloads
+- change unrelated Fretboard Drop UI
+- modify GuitarRise, Transcribe 2, Transcribe 3, or other modes
+- add backend, auth, database, deployment, or new dependencies
+- perform a broad reducer rewrite
+
+LIKELY FILES
+Inspect first and edit only what is necessary, likely including:
+
+- src/features/fretboardDrop/FretboardDropGame.tsx
+- src/features/fretboardDrop/dropGameUtils.ts
+- src/features/fretboardDrop/FretboardDropGame.test.tsx
+- focused dropGameUtils tests if needed
+
+Do not edit HorizontalDeadlineStage.tsx unless inspection proves a separate renderer defect remains.
+
+REQUIRED REGRESSION TESTS
+Add or update focused behavioral tests that prove all of the following:
+
+1. Wrong answer preserves the current target:
+   - same target ID
+   - same startedAt
+   - same durationMs
+   - no replacement target is created
+
+2. The active target continues after a wrong answer:
+   - progress is based on the original startedAt
+   - it expires only when getTargetProgress reaches 1
+
+3. Correct-answer replacement:
+   - old target is removed
+   - replacement has a new ID
+   - replacement.startedAt equals the correct-click action timestamp
+   - replacement initial progress at that same timestamp is 0
+   - this remains true even if the previous target was active for a long time and had one or more wrong answers
+
+4. Miss-recovery replacement:
+   - replacement.startedAt equals the finish-miss-reveal action timestamp
+   - replacement initial progress is 0
+   - stale nextStreamSpawnAt cannot backdate it
+
+5. Focus mode:
+   - replacement target begins at progress 0
+   - focus pool constraints remain intact
+
+6. Speed modes:
+   - fresh startedAt behavior is identical across Warm-Up, Practice Tempo, and Performance Tempo
+   - duration differences remain governed by existing speed configuration
+
+7. Existing single-clock behavior remains:
+   - visible progress and gameplay progress still use target.startedAt, durationMs, performance.now(), and getTargetProgress
+   - no CSS travel duration is reintroduced
+
+Prefer behavioral assertions over implementation-detail mocks.
+
+REQUIRED CHECKS
+Run:
+
+1. Focused Fretboard Drop tests
+2. Typecheck
+3. Full test suite
+4. Production build
+5. git diff --check
+
+Do not run browser automation, Playwright, live preview, or screenshot tests.
+
+FINAL REPORT
+Include:
+
+- confirmed root cause
+- whether the issue predated the RAF repair and why
+- exact files changed
+- why the chosen architecture is the simplest reliable fix
+- how wrong answers behave after the fix
+- how correct-hit replacements are timestamped
+- how post-miss replacements are timestamped
+- tests added or updated
+- results of all required checks
+- any remaining manual verification recommendations
+
+End with exactly:
+
+TASK COMPLETE
+
+Only use TASK COMPLETE if every requested change and check is finished.
+Otherwise end with:
+
+TASK INCOMPLETE
+
+and list the exact remaining work or blocker.

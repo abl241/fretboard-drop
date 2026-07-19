@@ -151,20 +151,16 @@ describe("drop cell progress", () => {
     expect(window.localStorage.getItem(DROP_CELL_PROGRESS_STORAGE_KEY)).toContain("standard:0:5");
   });
 
-  it("attributes service updates to the target cell instead of the clicked wrong cell", async () => {
+  it("attributes service updates to the actual clicked wrong cells", async () => {
     const repository = new LocalStorageCellProgressRepository();
     const target = makeTarget();
 
     await recordWrongTargetCellProgress(target, 4, practicedAt, repository);
     await recordWrongTargetCellProgress(target, 2, laterPractice, repository);
 
-    expect(await repository.getCell(createFretboardCellId(0, 5))).toMatchObject({
-      adjacentWrongTaps: 1,
-      otherWrongTaps: 1,
-      resolvedTargets: 0,
-    });
-    expect(await repository.getCell(createFretboardCellId(0, 4))).toBeNull();
-    expect(await repository.getCell(createFretboardCellId(0, 2))).toBeNull();
+    expect(await repository.getCell(createFretboardCellId(0, 5))).toBeNull();
+    expect(await repository.getCell(createFretboardCellId(0, 4))).toMatchObject({ adjacentWrongTaps: 1, resolvedTargets: 0 });
+    expect(await repository.getCell(createFretboardCellId(0, 2))).toMatchObject({ otherWrongTaps: 1, resolvedTargets: 0 });
   });
 
   it("records service correct and miss outcomes for the target cell", async () => {
