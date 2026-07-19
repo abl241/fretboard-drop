@@ -1,0 +1,42 @@
+{
+  "name": "fretboard-drop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "vite --config vite.config.ts --host 0.0.0.0 --port 5174",
+    "build": "vite build --config vite.config.ts",
+    "build:mobile": "vite build --config vite.config.ts && cap sync",
+    "serve": "vite preview --config vite.config.ts --host 0.0.0.0 --port 4174",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest",
+    "cap:sync": "cap sync",
+    "ios:open": "node scripts/ensure-xcode.mjs && cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.8",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.5.2",
+    "happy-dom": "^15.11.7",
+    "tailwindcss": "^4.1.8",
+    "typescript": "~5.9.2",
+    "vite": "^6.3.5",
+    "vitest": "^2.1.9"
+  }
+}
