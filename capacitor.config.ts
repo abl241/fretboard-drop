@@ -7,11 +7,6 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "automatic",
   },
-
-  server: {
-    url: "http://192.168.86.209:5174/",
-    cleartext: true,
-  }
 };
 
 export default config;
