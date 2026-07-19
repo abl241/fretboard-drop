@@ -10,6 +10,8 @@ type ResolvedPickSnapshot = {
   progress: number;
 };
 
+type PlayGateState = "idle" | "approach" | "urgent" | "correct" | "miss";
+
 export function getHorizontalDeadlinePickContactPercent(progress: number): number {
   const clampedProgress = Math.max(0, Math.min(1, progress));
   return PICK_START_CONTACT_PERCENT + clampedProgress * (DEADLINE_CONTACT_PERCENT - PICK_START_CONTACT_PERCENT);
@@ -45,7 +47,11 @@ export function HorizontalDeadlineStage({
   const isMissCue = cue?.kind === "miss";
   const isReducedMotion = usePrefersReducedMotion();
   const focusLabel = `Focus: ${getPracticeLabel(stringSelection, practiceContext)}`;
-  const deadlineState = cue?.kind === "miss" ? "miss" : activeProgress >= 0.8 ? "urgent" : "idle";
+  const playGateState = getPlayGateState({
+    progress: activeProgress,
+    isFinalSecond,
+    cue,
+  });
 
   useEffect(() => {
     if (!activeTarget) return;
@@ -71,17 +77,8 @@ export function HorizontalDeadlineStage({
           {combo} streak
         </div>
       ) : null}
-      <div
-        className={`horizontal-deadline-gate horizontal-deadline-gate--${deadlineState} pointer-events-none absolute top-[20%] bottom-[18%] z-10`}
-        style={{ left: `${DEADLINE_CONTACT_PERCENT}%` }}
-        data-state={deadlineState}
-        aria-hidden="true"
-      >
-        <span className="horizontal-deadline-gate-arrival-zone" />
-        <span className="horizontal-deadline-line" data-testid="horizontal-deadline-line" data-state={deadlineState} />
-        <span className="horizontal-deadline-gate-cap horizontal-deadline-gate-cap--top" />
-        <span className="horizontal-deadline-gate-cap horizontal-deadline-gate-cap--bottom" />
-      </div>
+      <HorizontalTravelLane />
+      <HorizontalPlayGate state={playGateState} isReducedMotion={isReducedMotion} />
       {activeTarget ? (
         <HorizontalDeadlinePick
           key={activeTarget.id}
@@ -112,6 +109,61 @@ export function HorizontalDeadlineStage({
         />
       ) : null}
       {cue && cue.kind !== "miss" ? <HorizontalStageCue cue={cue} /> : null}
+    </div>
+  );
+}
+
+export function getPlayGateState({
+  progress,
+  isFinalSecond,
+  cue,
+}: {
+  progress: number;
+  isFinalSecond: boolean;
+  cue: DropStageCue | null;
+}): PlayGateState {
+  if (cue?.kind === "miss") return "miss";
+  if (cue?.kind === "correct" || cue?.kind === "tier-up") return "correct";
+  if (isFinalSecond || progress >= 0.8) return "urgent";
+  if (progress >= 0.65) return "approach";
+  return "idle";
+}
+
+function HorizontalTravelLane() {
+  return (
+    <div className="horizontal-travel-lane pointer-events-none absolute inset-y-0 left-[12%] right-[14%] z-0" aria-hidden="true">
+      <span className="horizontal-travel-lane-line" />
+      {[31, 52, 70].map((position) => (
+        <span key={position} className="horizontal-travel-lane-marker" style={{ left: `${position}%` }} />
+      ))}
+    </div>
+  );
+}
+
+export function HorizontalPlayGate({
+  state,
+  isReducedMotion,
+}: {
+  state: PlayGateState;
+  isReducedMotion: boolean;
+}) {
+  return (
+    <div
+      className={`horizontal-play-gate horizontal-play-gate--${state} pointer-events-none absolute top-[20%] bottom-[18%] z-10`}
+      style={{ left: `${DEADLINE_CONTACT_PERCENT}%` }}
+      data-testid="horizontal-play-gate"
+      data-state={state}
+      data-motion={isReducedMotion ? "reduced" : "normal"}
+      aria-hidden="true"
+    >
+      <span className="horizontal-play-gate-zone" />
+      <span className="horizontal-play-gate-rail horizontal-play-gate-rail--left" />
+      <span className="horizontal-play-gate-rail horizontal-play-gate-rail--right" />
+      <span className="horizontal-play-gate-contact" />
+      <span className="horizontal-play-gate-charge" />
+      <span className="horizontal-play-gate-wave" />
+      <span className="horizontal-play-gate-cap horizontal-play-gate-cap--top"><i /><i /><i /></span>
+      <span className="horizontal-play-gate-cap horizontal-play-gate-cap--bottom"><i /><i /><i /></span>
     </div>
   );
 }

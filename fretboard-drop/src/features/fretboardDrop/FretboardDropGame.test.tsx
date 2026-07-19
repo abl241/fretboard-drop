@@ -356,7 +356,7 @@ describe("FretboardDropGame", () => {
       stringIndex: 0 as const,
       fret: 5,
       startedAt: 1_000,
-      durationMs: 1_000,
+      durationMs: 5_000,
       stageXPercent: 20,
       stageYPercent: 20,
     };
@@ -381,8 +381,48 @@ describe("FretboardDropGame", () => {
     expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickContactPercent(progress).toFixed(2));
     expect(travel).toHaveClass("horizontal-deadline-pick-travel--active");
     expect(travel.style.getPropertyValue("--pick-contact-percent")).toBe(`${getHorizontalDeadlinePickContactPercent(progress)}%`);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveStyle({ left: `${DEADLINE_CONTACT_PERCENT}%` });
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "idle");
     expect(getHorizontalDeadlinePickContactPercent(0)).toBe(PICK_START_CONTACT_PERCENT);
     expect(getHorizontalDeadlinePickContactPercent(1)).toBe(DEADLINE_CONTACT_PERCENT);
+  });
+
+  it("derives Play Gate approach, urgent, success, and miss states from existing progress and cues", () => {
+    const target = {
+      id: 17,
+      targetKey: "standard:0:5" as const,
+      stringId: "standard:0" as const,
+      note: "A" as const,
+      stringIndex: 0 as const,
+      fret: 5,
+      startedAt: 1_000,
+      durationMs: 5_000,
+      stageXPercent: 20,
+      stageYPercent: 20,
+    };
+    const stageProps = {
+      fallingTargets: [target],
+      activeTargetId: target.id,
+      combo: 0,
+      stringSelection: [0] as const,
+      practiceContext: { practiceType: "string-focus" as const, selectedNotes: null },
+      targetSizePx: 88,
+    };
+    const { rerender } = render(<HorizontalDeadlineStage {...stageProps} cue={null} animationTime={4_500} />);
+
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "approach");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={null} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "urgent");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={{ id: 1, kind: "correct", note: "A", message: "Correct" }} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "correct");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={{ id: 2, kind: "tier-up", note: "A", message: "Tier up" }} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "correct");
+
+    rerender(<HorizontalDeadlineStage {...stageProps} cue={{ id: 3, kind: "miss", note: "A", message: "Miss" }} animationTime={5_250} />);
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "miss");
   });
 
   it("moves the normal-run horizontal pick from the reducer game clock through the deadline", () => {
@@ -462,7 +502,7 @@ describe("FretboardDropGame", () => {
     render(<FretboardDropGame />);
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
-    expect(screen.getByTestId("horizontal-deadline-line")).toBeInTheDocument();
+    expect(screen.getByTestId("horizontal-play-gate")).toBeInTheDocument();
     expect(getHorizontalDeadlinePickTravel()).toHaveStyle({ width: "65px", height: "65px" });
   });
 
@@ -1129,7 +1169,7 @@ describe("FretboardDropGame", () => {
     expect(reveal).toBeInTheDocument();
     expect(reveal.textContent).toMatch(/^[A-G]$/);
     expect(screen.getByTestId("horizontal-deadline-impact")).toBeInTheDocument();
-    expect(screen.getByTestId("horizontal-deadline-line")).toHaveAttribute("data-state", "miss");
+    expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "miss");
     expect(screen.queryByLabelText(/Note prompt .+ \(active\)/)).not.toBeInTheDocument();
 
     act(() => {

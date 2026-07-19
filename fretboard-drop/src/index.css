@@ -370,54 +370,148 @@ button {
     0 18px 42px rgba(0, 0, 0, 0.18);
 }
 
-.horizontal-deadline-gate {
-  width: 2px;
-  color: rgba(103, 232, 249, 0.78);
-  transition: color 120ms ease;
+.horizontal-travel-lane {
+  --lane-y: 51%;
 }
 
-.horizontal-deadline-gate-arrival-zone {
+.horizontal-travel-lane-line {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: var(--lane-y);
+  left: 0;
   right: 0;
-  width: 16px;
-  background: rgba(34, 211, 238, 0.07);
-  border-left: 1px solid rgba(103, 232, 249, 0.1);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.1) 14%, rgba(103, 232, 249, 0.18) 74%, transparent);
 }
 
-.horizontal-deadline-line {
+.horizontal-travel-lane-marker {
   position: absolute;
-  inset: 0;
+  top: calc(var(--lane-y) - 8px);
+  width: 1px;
+  height: 16px;
+  background: linear-gradient(180deg, transparent, rgba(103, 232, 249, 0.2), transparent);
+}
+
+.horizontal-play-gate {
+  width: 28px;
+  margin-left: -14px;
+  color: rgba(103, 232, 249, 0.78);
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.14));
+  transition: color 120ms ease, filter 120ms ease;
+}
+
+.horizontal-play-gate-zone {
+  position: absolute;
+  inset: 8px 5px;
+  border: 1px solid rgba(103, 232, 249, 0.12);
+  background: linear-gradient(90deg, rgba(8, 47, 73, 0.26), rgba(34, 211, 238, 0.09), rgba(8, 47, 73, 0.26));
+}
+
+.horizontal-play-gate-rail {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
   width: 2px;
   background: currentColor;
-  box-shadow: 0 0 12px rgba(103, 232, 249, 0.28);
+  box-shadow: 0 0 10px rgba(103, 232, 249, 0.3);
 }
 
-.horizontal-deadline-gate-cap {
+.horizontal-play-gate-rail--left { left: 5px; }
+.horizontal-play-gate-rail--right { right: 5px; }
+
+.horizontal-play-gate-contact {
   position: absolute;
-  left: -4px;
-  width: 10px;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(236, 254, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(165, 243, 252, 0.9);
+  box-shadow: 0 0 12px rgba(103, 232, 249, 0.64);
+  transform: translate(-50%, -50%);
+}
+
+.horizontal-play-gate-charge,
+.horizontal-play-gate-wave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.horizontal-play-gate-charge {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(207, 250, 254, 0.9);
+  opacity: 0;
+}
+
+.horizontal-play-gate-wave {
+  width: 12px;
+  height: 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  opacity: 0;
+}
+
+.horizontal-play-gate-cap {
+  position: absolute;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 28px;
+  height: 5px;
+  border: 1px solid rgba(207, 250, 254, 0.42);
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(226, 232, 240, 0.45), rgba(15, 23, 42, 0.86));
+  box-shadow: 0 1px 5px rgba(34, 211, 238, 0.2);
+}
+
+.horizontal-play-gate-cap i {
+  width: 2px;
   height: 2px;
-  background: currentColor;
-  box-shadow: 0 0 8px rgba(103, 232, 249, 0.22);
+  border-radius: 999px;
+  background: rgba(165, 243, 252, 0.55);
 }
 
-.horizontal-deadline-gate-cap--top {
-  top: 0;
+.horizontal-play-gate-cap--top { top: 0; }
+.horizontal-play-gate-cap--bottom { bottom: 0; }
+
+.horizontal-play-gate--approach {
+  color: rgba(165, 243, 252, 0.92);
+  filter: drop-shadow(0 0 12px rgba(34, 211, 238, 0.25));
 }
 
-.horizontal-deadline-gate-cap--bottom {
-  bottom: 0;
+.horizontal-play-gate--approach .horizontal-play-gate-charge {
+  animation: horizontal-play-gate-charge 720ms ease-in-out infinite;
 }
 
-.horizontal-deadline-gate--urgent {
-  color: rgba(224, 242, 254, 0.98);
+.horizontal-play-gate--urgent {
+  color: rgba(224, 242, 254, 1);
+  filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.42));
 }
 
-.horizontal-deadline-gate--miss {
+.horizontal-play-gate--urgent .horizontal-play-gate-contact {
+  animation: horizontal-play-gate-urgent 680ms ease-in-out infinite;
+}
+
+.horizontal-play-gate--correct {
+  color: rgba(103, 232, 249, 1);
+  animation: horizontal-play-gate-correct 220ms ease-out both;
+}
+
+.horizontal-play-gate--correct .horizontal-play-gate-wave {
+  border-color: rgba(251, 191, 36, 0.92);
+  animation: horizontal-play-gate-wave 220ms ease-out both;
+}
+
+.horizontal-play-gate--miss {
   color: rgba(251, 146, 60, 0.98);
-  animation: horizontal-deadline-gate-miss 260ms ease-out both;
+  animation: horizontal-play-gate-miss 240ms ease-out both;
 }
 
 .horizontal-deadline-pick-travel,
@@ -436,7 +530,7 @@ button {
 }
 
 .horizontal-deadline-pick--resolved-correct {
-  animation: horizontal-deadline-correct-fade 160ms ease-out both;
+  animation: horizontal-deadline-correct-fade 220ms ease-out both;
 }
 
 .horizontal-deadline-pick--final-second {
@@ -544,14 +638,38 @@ button {
   }
 }
 
-@keyframes horizontal-deadline-gate-miss {
+@keyframes horizontal-play-gate-miss {
   0% {
-    color: rgba(251, 146, 60, 0.98);
+    color: rgba(251, 146, 60, 1);
+    transform: scaleX(1.16);
   }
 
   100% {
     color: rgba(251, 146, 60, 0.62);
+    transform: scaleX(1);
   }
+}
+
+@keyframes horizontal-play-gate-charge {
+  0% { opacity: 0; transform: translate(-250%, -50%) scale(0.7); }
+  45% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes horizontal-play-gate-urgent {
+  0%, 100% { box-shadow: 0 0 12px rgba(103, 232, 249, 0.64); }
+  50% { box-shadow: 0 0 20px rgba(165, 243, 252, 0.96); }
+}
+
+@keyframes horizontal-play-gate-correct {
+  0% { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.4)); transform: scale(1); }
+  45% { filter: drop-shadow(0 0 22px rgba(251, 191, 36, 0.82)); transform: scale(1.08); }
+  100% { filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.3)); transform: scale(1); }
+}
+
+@keyframes horizontal-play-gate-wave {
+  0% { opacity: 0.92; transform: translate(-50%, -50%) scale(0.7); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(4); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -577,6 +695,19 @@ button {
 
   .horizontal-deadline-pick--final-second {
     animation: none;
+  }
+
+  .horizontal-play-gate--approach .horizontal-play-gate-charge,
+  .horizontal-play-gate--urgent .horizontal-play-gate-contact,
+  .horizontal-play-gate--correct,
+  .horizontal-play-gate--correct .horizontal-play-gate-wave,
+  .horizontal-play-gate--miss {
+    animation: none;
+  }
+
+  .horizontal-play-gate--correct .horizontal-play-gate-contact,
+  .horizontal-play-gate--miss .horizontal-play-gate-contact {
+    opacity: 0.96;
   }
 
   .horizontal-deadline-fragment {
