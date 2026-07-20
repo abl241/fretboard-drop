@@ -1,0 +1,9 @@
+{
+	"appId": "com.guitarrise.fretboarddrop",
+	"appName": "Fretboard Drop",
+	"webDir": "dist",
+	"ios": {
+		"contentInset": "automatic"
+	},
+	"packageClassList": []
+}
