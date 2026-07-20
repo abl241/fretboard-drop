@@ -377,10 +377,17 @@ describe("FretboardDropGame", () => {
 
     const pick = getHorizontalDeadlinePick();
     const travel = getHorizontalDeadlinePickTravel();
+    const contact = screen.getByTestId("horizontal-deadline-pick-contact");
+    const artwork = screen.getByTestId("horizontal-deadline-pick-artwork");
     expect(pick).toHaveAttribute("data-progress", progress.toFixed(3));
     expect(pick).toHaveAttribute("data-position-percent", getHorizontalDeadlinePickContactPercent(progress).toFixed(2));
     expect(travel).toHaveClass("horizontal-deadline-pick-travel--active");
     expect(travel.style.getPropertyValue("--pick-contact-percent")).toBe(`${getHorizontalDeadlinePickContactPercent(progress)}%`);
+    expect(artwork).toHaveAttribute("src", expect.stringContaining("blue-guitar-pick"));
+    expect(artwork).toHaveAttribute("alt", "");
+    expect(contact.parentElement).toBe(pick);
+    expect(artwork.parentElement).toBe(pick);
+    expect(pick.querySelector(".horizontal-deadline-pick-body")).toBeNull();
     expect(screen.getByTestId("horizontal-play-gate")).toHaveStyle({ left: `${DEADLINE_CONTACT_PERCENT}%` });
     expect(screen.getByTestId("horizontal-play-gate")).toHaveAttribute("data-state", "idle");
     expect(getHorizontalDeadlinePickContactPercent(0)).toBe(PICK_START_CONTACT_PERCENT);
@@ -503,7 +510,7 @@ describe("FretboardDropGame", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start Run" }));
 
     expect(screen.getByTestId("horizontal-play-gate")).toBeInTheDocument();
-    expect(getHorizontalDeadlinePickTravel()).toHaveStyle({ width: "65px", height: "65px" });
+    expect(getHorizontalDeadlinePickTravel().style.getPropertyValue("--pick-art-size")).toBe("clamp(52px, 7vw, 52px)");
   });
 
   it("marks the horizontal stage reduced-motion fallback when requested", () => {

@@ -1,0 +1,393 @@
+# FRETBOARD DROP: REAL GUITAR PICK + PRECISE CONTACT MARKER
+
+## Codex run recommendation
+
+Model: Terra
+Effort: Medium
+Speed: Normal
+
+## Codex run instructions
+
+Read and execute this prompt from the repository's prompts folder.
+
+Work only in the Fretboard Drop project.
+
+Do not run browser automation, Playwright, live preview testing, or screenshot testing. The user will manually test the deployed app.
+
+Run only the focused tests, typecheck, and production build required by this prompt.
+
+End the final response with exactly:
+
+TASK COMPLETE
+
+Only use that marker if all requested code changes and checks are complete. Otherwise end with:
+
+TASK INCOMPLETE
+
+and list the exact blocker or remaining work.
+
+---
+
+## Root problem
+
+The current moving target looks like a generic blue mechanical gem rather than a guitar pick.
+
+More importantly, the renderer currently asks one oversized visual object to perform two separate jobs:
+
+1. provide a visible, attractive moving target
+2. identify an exact string and fret position
+
+That breaks down at higher fret numbers because fret cells become narrower. The large target overlaps adjacent cells and makes the intended fret ambiguous.
+
+## Are we solving the root problem, or just patching the current architecture?
+
+We are solving the root problem.
+
+Do not merely swap the current graphic or reduce its size globally. Separate the decorative moving pick from the precise target/contact coordinate.
+
+The exact string-and-fret coordinate must remain the source of truth. The pick artwork should be visually offset so its pointed tip lands on that coordinate, while a compact marker shows the exact answer location.
+
+---
+
+## Engineering review
+
+### Option 1: Small patch
+
+Replace the existing gem with the new pick image and make it smaller.
+
+- Complexity: low
+- Maintenance: low
+- Risk: high-fret ambiguity remains
+- Verdict: insufficient
+
+### Option 2: Focused renderer refactor
+
+Keep the current timing, movement, reducer, target generation, and scoring. Introduce a small presentation layer that renders:
+
+- one exact contact point derived from the existing target position
+- one decorative guitar-pick image offset from that point
+- one compact precision marker centered on that point
+
+- Complexity: low to moderate
+- Maintenance: low
+- Security/cost: no impact
+- Risk: limited to renderer geometry and CSS
+- Verdict: recommended
+
+### Option 3: Fully adaptive target-layout system
+
+Dynamically scale, rotate, and reposition the artwork based on viewport, fret width, string spacing, and edge proximity.
+
+- Complexity: high
+- Maintenance: higher
+- Risk: introduces unnecessary geometry branches
+- Verdict: overkill for the current stage
+
+Implement Option 2.
+
+Use Rob Pike's principle: simple data flow, one source of truth, no clever duplicate positioning system.
+
+Use Steve Jobs' principle: the target should feel unmistakably guitar-specific, polished, and obvious without visual clutter.
+
+---
+
+## Current repository areas to inspect first
+
+Start with these likely files and confirm their current responsibilities before editing:
+
+- `src/features/fretboardDrop/HorizontalDeadlineStage.tsx`
+- `src/features/fretboardDrop/FretboardDropGame.tsx`
+- `src/features/fretboardDrop/FretboardDropGame.test.tsx`
+- `src/index.css`
+
+Also search for:
+
+- the current active target/gem markup
+- the current pick wrapper or target wrapper
+- the code that converts `getTargetProgress(...)` into an x-position
+- the string/fret coordinate calculation
+- classes related to the circular ring, center hole, vertical stripe, glow, gem, or target
+- any existing asset folder used by Fretboard Drop
+
+Do not assume filenames if the implementation has moved. Follow the actual imports and render path.
+
+---
+
+## Asset
+
+Use the user-provided transparent blue guitar-pick PNG.
+
+Preferred repository location:
+
+`src/assets/fretboard-drop/blue-guitar-pick.png`
+
+If the repository already has a more appropriate established asset directory, use that instead.
+
+Do not recreate the old circular gem around this image.
+
+Do not add:
+
+- a center hole
+- a vertical mechanical stripe
+- a large circular housing
+- a thick circular targeting ring
+- decorative machinery that obscures the pick silhouette
+
+The pick itself should remain recognizable.
+
+If the source image is not yet present in the repository, do not fabricate a substitute. Add the expected import/path cleanly and report the exact file location the user must place it, or use an existing copied version only if it is already available in the workspace.
+
+---
+
+## Required implementation
+
+### 1. Preserve one timing and movement source of truth
+
+Do not change:
+
+- reducer timing
+- `performance.now()` timing domain
+- `target.startedAt`
+- `target.durationMs`
+- `getTargetProgress`
+- hit/miss timing
+- target spawning
+- scoring
+- lives
+- speed modes
+- wrong-answer behavior
+- game-over behavior
+
+The current exact target coordinate must remain derived from the existing gameplay state.
+
+Do not introduce:
+
+- a second `requestAnimationFrame` clock
+- a CSS duration-based travel animation
+- duplicate progress state
+- independent visual timing
+- delayed visual interpolation
+
+The pick artwork and precision marker must be rendered from the same current target position.
+
+### 2. Introduce a small presentation component
+
+Prefer a compact component such as:
+
+`PickTargetIndicator`
+
+or an equally clear local name.
+
+Its conceptual inputs should be minimal, for example:
+
+- exact target x-coordinate or progress-derived position
+- exact target y-coordinate/string position
+- active/final-second state if already available
+- reduced-motion state if already available
+
+Do not pass the entire game state if a few primitive values are sufficient.
+
+The component should render two layers:
+
+#### Precision layer
+
+A compact marker centered exactly on the intended string/fret target coordinate.
+
+Recommended appearance:
+
+- 5 to 7 CSS pixels at normal desktop scale
+- a small dot, short vertical tick, or tiny crosshair-like contact cue
+- high contrast against the fretboard
+- restrained glow only
+- no label
+- no large ring
+- pointer-events disabled
+- does not alter layout
+
+This marker is the authoritative visual answer location.
+
+#### Pick artwork layer
+
+Render the real guitar-pick image as a decorative layer positioned relative to the same contact coordinate.
+
+The pointed tip of the pick must visually land on or immediately adjacent to the precision marker.
+
+Do not center the image on the coordinate.
+
+Use a clear CSS transform or offset so the pick's tip is the anchor. Keep that offset in one place rather than scattering magic numbers across JSX and CSS.
+
+For example, a wrapper may be positioned at the exact coordinate, then the image translated so its pointed tip aligns with the wrapper origin.
+
+The exact transform should be tuned to the actual PNG proportions.
+
+### 3. Size behavior
+
+The current target is too large for narrow high-number fret cells.
+
+Use a modest base size, approximately 20 to 30 percent smaller than the current rendered target.
+
+Do not shrink the pick until it becomes unrecognizable.
+
+Recommended approach:
+
+- use one restrained responsive size with `clamp(...)`
+- keep the precision marker constant or nearly constant
+- allow the decorative body of the pick to overlap adjacent cells if necessary
+- rely on the pointed tip and marker, not the body width, for exact fret identification
+
+Avoid complicated per-fret scaling unless the current renderer exposes fret-cell width so cleanly that a single simple clamp can use it without new state.
+
+Do not introduce a table of special sizes for fret 1, fret 2, fret 10, and so on.
+
+### 4. High-fret clarity
+
+At frets 9 through the highest supported fret:
+
+- the marker must remain centered in the correct fret cell
+- the marker must remain centered on the correct string
+- the pick tip must point to that marker
+- adjacent fret cells must remain visually distinguishable
+- the pick body must not be used as the fret boundary indicator
+
+Check open-string placement too. Do not accidentally position the tip outside the visible board.
+
+If edge clipping occurs near the right side, prefer allowing the pick body to extend inward while keeping the marker exact. Do not move the marker away from the true answer coordinate merely to fit the artwork.
+
+### 5. Remove obsolete gem styling
+
+Remove or stop using styling tied only to the old mechanical gem, including obsolete:
+
+- center-hole elements
+- vertical stripe elements
+- circular shell/housing elements
+- oversized target rings
+- gem facets that are no longer rendered
+- unused keyframes related to the old appearance
+
+Do not perform a broad CSS cleanup. Remove only code made obsolete by this change.
+
+### 6. Interaction and accessibility
+
+The pick and marker must:
+
+- use `pointer-events: none`
+- not intercept fretboard clicks
+- not change hit testing
+- not create a new tab stop
+- preserve existing accessible labels and game instructions
+- preserve reduced-motion behavior
+- include appropriate empty alt text if the image is purely decorative
+
+The precision marker is visual only and should not create redundant screen-reader output.
+
+---
+
+## Tests
+
+Update or add focused tests that verify behavior rather than fragile pixel styling.
+
+At minimum, verify:
+
+1. the active target renders the guitar-pick image
+2. the old mechanical gem-only elements are no longer rendered
+3. the precision marker renders for an active target
+4. the marker and pick are children of the same position anchor or otherwise consume the same target position
+5. target progression still comes from the existing game clock/state path
+6. clicks still reach the fretboard and existing gameplay tests remain unchanged
+7. a high-fret target does not trigger separate timing or position state
+
+Avoid tests that assert exact CSS pixel values unless the repository already uses that style consistently.
+
+Do not rewrite unrelated tests.
+
+---
+
+## Guardrails
+
+Do not change:
+
+- gameplay rules
+- timing duration
+- scoring
+- strikes/lives
+- mode selection
+- string focus
+- answer choices
+- fretboard geometry
+- target generation
+- persistence
+- results screen
+- Play Gate behavior
+- Home navigation
+- backend
+- authentication
+- database
+- deployment configuration
+- unrelated GuitarRise or Transcribe code
+
+Do not add dependencies.
+
+Do not redesign the fretboard.
+
+Do not add animation libraries.
+
+Do not add a new coordinate system.
+
+Do not hide ambiguity with a larger glow.
+
+---
+
+## Pike review before finishing
+
+Confirm:
+
+- Is there still only one authoritative target coordinate?
+- Is there still only one authoritative timing path?
+- Is the pick only presentation?
+- Is the marker exact and independent of artwork size?
+- Are transforms and offsets defined in one obvious place?
+- Did we remove obsolete code instead of layering new code over it?
+- Could a future developer understand the positioning in under a minute?
+
+If not, simplify.
+
+## Jobs review before finishing
+
+Confirm:
+
+- Does the moving object immediately read as a guitar pick?
+- Can a player tell the exact fret without thinking?
+- Are high-number frets clearer than before?
+- Is the visual polished but restrained?
+- Did we remove mechanical decoration that competes with the guitar metaphor?
+- Does the first glance feel intentional rather than generic?
+
+---
+
+## Required checks
+
+Run:
+
+1. the focused Fretboard Drop test file(s)
+2. project typecheck
+3. production build
+4. `git diff --check`
+
+Do not run browser automation, Playwright, live preview, or screenshot testing.
+
+---
+
+## Final report
+
+Report:
+
+- root cause confirmed
+- exact files changed
+- how the single coordinate anchors both marker and artwork
+- how the pick tip alignment is implemented
+- how high-fret ambiguity is resolved
+- obsolete gem styling removed
+- tests/checks run and results
+- any manual visual checks the user should perform on phone and desktop
+
+End with `TASK COMPLETE` only if everything above is finished.

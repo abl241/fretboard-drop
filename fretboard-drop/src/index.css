@@ -516,7 +516,7 @@ button {
 
 .horizontal-deadline-pick-travel,
 .horizontal-deadline-impact {
-  transform: translate3d(-100%, -50%, 0);
+  transform: translate3d(-50%, -50%, 0);
 }
 
 .horizontal-deadline-pick-travel {
@@ -524,6 +524,8 @@ button {
 }
 
 .horizontal-deadline-pick {
+  width: 0;
+  height: 0;
   filter:
     drop-shadow(0 0 18px rgba(251, 191, 36, 0.28))
     drop-shadow(0 0 8px currentColor);
@@ -537,22 +539,42 @@ button {
   animation: horizontal-deadline-final-second 720ms ease-in-out infinite;
 }
 
-.horizontal-deadline-pick-body {
-  border: 2px solid rgba(255, 251, 235, 0.72);
-  border-radius: 48% 52% 56% 44% / 38% 38% 62% 62%;
-  background:
-    radial-gradient(circle at 33% 22%, rgba(255, 255, 255, 0.9), rgba(254, 243, 199, 0.34) 24%, transparent 42%),
-    linear-gradient(145deg, #fef3c7 0%, #facc15 38%, #d97706 72%, #7c2d12 100%);
-  clip-path: polygon(50% 4%, 88% 22%, 95% 55%, 66% 93%, 34% 93%, 5% 55%, 12% 22%);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.42),
-    inset 0 -16px 24px rgba(124, 45, 18, 0.24);
+.horizontal-deadline-pick-contact {
+  position: absolute;
+  z-index: 2;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  background: #67e8f9;
+  box-shadow: 0 0 7px rgba(103, 232, 249, 0.94);
+  transform: translate(-50%, -50%);
+}
+
+.horizontal-deadline-pick-artwork {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: var(--pick-art-size);
+  max-width: none;
+  height: auto;
+  transform: translate(-50%, 1%);
+  transform-origin: bottom center;
 }
 
 .horizontal-deadline-pick-note {
-  font-size: 2.35rem;
-  text-shadow: 0 1px 0 rgba(255, 251, 235, 0.42);
-  -webkit-text-stroke: 1px rgba(255, 251, 235, 0.3);
+  position: absolute;
+  bottom: calc(var(--pick-art-size) * 0.62);
+  left: 0;
+  z-index: 1;
+  min-width: 1.25rem;
+  transform: translateX(-50%);
+  color: #f8fafc;
+  font-size: clamp(1rem, 2.2vw, 1.35rem);
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(2, 6, 23, 0.95);
 }
 
 .horizontal-deadline-fragment {
@@ -730,9 +752,6 @@ button {
     min-height: 8.5rem !important;
   }
 
-  .horizontal-deadline-pick-note {
-    font-size: 1.95rem;
-  }
 }
 
 .drop-stats-3d-view {
