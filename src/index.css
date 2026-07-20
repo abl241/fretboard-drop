@@ -112,33 +112,27 @@ body {
 
 .name-note-target-marker {
   overflow: hidden;
-  border-color: rgba(224, 251, 255, 0.94);
-  border-radius: 50% 50% 48% 48% / 32% 32% 66% 66%;
-  background:
-    radial-gradient(ellipse at 33% 20%, rgba(255, 255, 255, 0.96) 0 5%, rgba(207, 250, 254, 0.56) 11%, transparent 29%),
-    linear-gradient(155deg, #d8fbff 0%, #67e8f9 31%, #0891b2 67%, #164e63 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
-    inset 0 -7px 10px rgba(8, 47, 73, 0.38),
-    0 0 18px rgba(103, 232, 249, 0.48);
-  clip-path: polygon(50% 2%, 85% 20%, 94% 50%, 66% 93%, 34% 93%, 6% 50%, 15% 20%);
+  border-color: rgba(224, 251, 255, 0.62);
+  background: rgba(2, 6, 23, 0.44);
 }
 
-.name-note-target-specular {
+.name-note-target-pick-artwork {
   position: absolute;
-  top: 16%;
-  left: 29%;
-  width: 35%;
-  height: 16%;
-  border-radius: 100%;
-  background: rgba(255, 255, 255, 0.52);
-  filter: blur(0.4px);
-  transform: rotate(-20deg);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 7px rgba(103, 232, 249, 0.62));
 }
 
 .name-note-target-contact {
   opacity: 0.7;
   box-shadow: 0 1px 2px rgba(255, 255, 255, 0.2), inset 0 1px 1px rgba(0, 0, 0, 0.64);
+}
+
+.name-note-target-reveal {
+  color: #f8fafc;
+  text-shadow: 0 1px 3px rgba(2, 6, 23, 0.96);
 }
 
 .name-note-target-marker--correct {
