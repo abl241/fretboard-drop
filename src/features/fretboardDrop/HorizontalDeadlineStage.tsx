@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import blueGuitarPick from "../../assets/fretboard-drop/blue-guitar-pick.png";
 import type { DropPracticeContext, DropStageCue, DropStringSelection, DropTarget } from "./dropGameTypes";
 import { getPracticeLabel, getPromptTimeRemaining, getStringAccent, getTargetProgress } from "./dropGameUtils";
 
@@ -181,17 +182,14 @@ function HorizontalDeadlinePick({
   state: "active" | "resolved-correct";
   isFinalSecond: boolean;
 }) {
-  const accent = getStringAccent(target.stringIndex);
   const contactPercent = getHorizontalDeadlinePickContactPercent(progress);
-  const sizePx = Math.max(64, Math.round(targetSizePx * 0.9));
+  const sizePx = Math.max(52, Math.round(targetSizePx * 0.68));
   const isActive = state === "active";
   const travelRef = useRef<HTMLDivElement>(null);
   useActivePickTravel(travelRef, isActive ? target : null);
   const travelStyle: CSSProperties = {
     "--pick-contact-percent": `${contactPercent}%`,
-    width: sizePx,
-    height: sizePx,
-    color: accent.color,
+    "--pick-art-size": `clamp(52px, 7vw, ${sizePx}px)`,
   } as CSSProperties;
 
   return (
@@ -205,21 +203,47 @@ function HorizontalDeadlinePick({
       data-state={state}
       data-target-id={target.id}
     >
-      <div
-        className={`horizontal-deadline-pick horizontal-deadline-pick--${state} ${isFinalSecond ? "horizontal-deadline-pick--final-second" : ""} flex h-full w-full items-center justify-center`}
+      <PickTargetIndicator
+        note={target.note}
+        state={state}
+        isFinalSecond={isFinalSecond}
+        progress={progress}
+        contactPercent={contactPercent}
         aria-label={state === "active" ? `Note prompt ${target.note} (active)` : undefined}
-        aria-hidden={state === "resolved-correct" ? "true" : undefined}
-        data-testid="horizontal-deadline-pick"
-        data-progress={progress.toFixed(3)}
-        data-position-percent={contactPercent.toFixed(2)}
-        data-state={state}
-        data-final-second={isFinalSecond ? "true" : "false"}
-      >
-        <span className="horizontal-deadline-pick-body absolute inset-0" aria-hidden="true" />
-        <span className="horizontal-deadline-pick-note relative z-10 font-black leading-none text-slate-950">
-          {target.note}
-        </span>
-      </div>
+      />
+    </div>
+  );
+}
+
+function PickTargetIndicator({
+  note,
+  state,
+  isFinalSecond,
+  progress,
+  contactPercent,
+  "aria-label": ariaLabel,
+}: {
+  note: string;
+  state: "active" | "resolved-correct";
+  isFinalSecond: boolean;
+  progress: number;
+  contactPercent: number;
+  "aria-label"?: string;
+}) {
+  return (
+    <div
+      className={`horizontal-deadline-pick horizontal-deadline-pick--${state} ${isFinalSecond ? "horizontal-deadline-pick--final-second" : ""} pointer-events-none absolute left-0 top-0`}
+      aria-label={ariaLabel}
+      aria-hidden={state === "resolved-correct" ? "true" : undefined}
+      data-testid="horizontal-deadline-pick"
+      data-progress={progress.toFixed(3)}
+      data-position-percent={contactPercent.toFixed(2)}
+      data-state={state}
+      data-final-second={isFinalSecond ? "true" : "false"}
+    >
+      <span className="horizontal-deadline-pick-contact" data-testid="horizontal-deadline-pick-contact" aria-hidden="true" />
+      <img className="horizontal-deadline-pick-artwork" src={blueGuitarPick} alt="" aria-hidden="true" data-testid="horizontal-deadline-pick-artwork" />
+      <span className="horizontal-deadline-pick-note" aria-hidden="true">{note}</span>
     </div>
   );
 }

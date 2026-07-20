@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft, RotateCcw, Timer, Trophy, Zap } from "lucide-react";
+import blueGuitarPick from "@/assets/fretboard-drop/blue-guitar-pick.png";
 import type { Note } from "@/lib/fretboard";
 import { DOT_FRETS } from "@/lib/fretboard";
 import { buildEligibleFretboardTargets, type FretboardTarget } from "@/lib/fretboardTargets";
@@ -1072,12 +1073,12 @@ function TargetCell({
             data-testid="name-note-target-marker"
             data-interaction-enabled={interactionEnabled ? "true" : "false"}
             data-outcome={outcome}
-            data-shape="pick-gem"
+            data-shape="guitar-pick"
             data-position-lock="centered"
           >
-            <span className="name-note-target-specular" aria-hidden="true" />
+            <img className="name-note-target-pick-artwork" src={blueGuitarPick} alt="" aria-hidden="true" data-testid="name-note-target-pick-artwork" />
             {outcome === "timeout" && revealedCorrectNote ? (
-              <span className="relative z-10 font-mono text-sm font-black text-slate-950">{revealedCorrectNote}</span>
+              <span className="name-note-target-reveal relative z-10 font-mono text-sm font-black">{revealedCorrectNote}</span>
             ) : (
               <span className="name-note-target-contact relative z-10 h-2 w-2 rounded-full bg-slate-950/82" aria-hidden="true" />
             )}
